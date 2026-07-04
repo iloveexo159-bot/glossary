@@ -35,7 +35,7 @@ function glossaryApp() {
     recent: [],
     result: null, resultState: 'idle', candidates: [], expanded: false,
     cards: [], mode: 'overview', tagFilter: null, cardSearch: '',
-    selectMode: false, selected: [], flipped: {},
+    selectMode: false, selected: [], flipped: {}, reviewOrder: [],
     detailId: null,
     toolbar: { show: false, x: 0, y: 0, text: '', context: 'results' },
     noteDialog: { show: false, quote: '', text: '', tags: [], tagInput: '', highlightId: null, cardId: null },
@@ -64,13 +64,16 @@ function glossaryApp() {
       if (p === 'results' && parts[1]) {
         const term = decodeURIComponent(parts[1]);
         this.page = 'results';
-        if (!this.result || this.result.title !== term) this.lookup(term);
+        // route() is the single lookup trigger; lastQuery dedupes repeat fires
+        if (this.lastQuery !== term) this.lookup(term);
       } else if (p === 'card' && parts[1]) {
         this.page = 'detail';
         this.detailId = parts[1];
         this.markReviewed(parts[1]);
       } else if (['home', 'cards', 'settings', 'pairing'].includes(p)) {
         this.page = p;
+        // re-entering the flashcards page refreshes the frozen review order
+        if (p === 'cards' && this.mode === 'review') this.reviewOrder = this.computeReviewOrder();
         if (p === 'home') this.$nextTick(() => this.focusSearch());
       } else {
         this.page = 'home';
@@ -131,9 +134,14 @@ function glossaryApp() {
     submitSearch(term) {
       this.showDropdown = false;
       this.query = term;
-      this.pushRecent(term);
-      this.nav('results', term);
-      this.lookup(term);
+      const target = '#/results/' + encodeURIComponent(term);
+      if (location.hash === target) {
+        // same hash: no hashchange will fire — retry failed/offline lookups directly
+        if (this.lastQuery !== term || ['error', 'offline'].includes(this.resultState)) this.lookup(term);
+        this.page = 'results';
+      } else {
+        location.hash = target; // route() performs the single lookup
+      }
     },
     clearSearch() {
       this.query = ''; this.suggestions = [];
@@ -171,6 +179,7 @@ function glossaryApp() {
           revision: data.revision || null,
         };
         this.resultState = 'ok';
+        this.pushRecent(data.title); // only successful lookups, canonical title (QA bug 7)
         cache[data.title.toLowerCase()] = { ...this.result, ts: Date.now() };
         cache[term.toLowerCase()] = cache[data.title.toLowerCase()];
         const keys = Object.keys(cache);
@@ -178,7 +187,7 @@ function glossaryApp() {
         lsSet(LS.cache, cache);
       } catch {
         const hit = cache[term.toLowerCase()];
-        if (hit) { this.result = hit; this.resultState = 'ok'; }
+        if (hit) { this.result = hit; this.resultState = 'ok'; this.pushRecent(hit.title); }
         else this.resultState = navigator.onLine ? 'error' : 'offline';
       }
     },
@@ -247,7 +256,18 @@ function glossaryApp() {
       const c = this.cards.find(x => x.id === id);
       if (c) { c.lastReviewedAt = Date.now(); this.persistCards(); }
     },
-    setMode(m) { this.mode = m; this.flipped = {}; if (m === 'review') { this.selectMode = false; this.selected = []; } },
+    /* Review order is frozen when entering review mode: flipping a card updates
+       its reviewed timestamp but the deck doesn't re-sort under the reader —
+       the fresh least-recently-reviewed order applies next time review opens. */
+    computeReviewOrder() {
+      return [...this.cards]
+        .sort((a, b) => (a.lastReviewedAt || 0) - (b.lastReviewedAt || 0))
+        .map(c => c.id);
+    },
+    setMode(m) {
+      this.mode = m; this.flipped = {};
+      if (m === 'review') { this.selectMode = false; this.selected = []; this.reviewOrder = this.computeReviewOrder(); }
+    },
     toggleSelectMode() { this.selectMode = !this.selectMode; this.selected = []; },
     visibleCards() {
       let list = [...this.cards];
@@ -258,8 +278,15 @@ function glossaryApp() {
       }
       const q = this.cardSearch.trim().toLowerCase();
       if (q) list = list.filter(c => (c.title || '').toLowerCase().includes(q) || (c.extract || '').toLowerCase().includes(q));
-      if (this.mode === 'review') list.sort((a, b) => (a.lastReviewedAt || 0) - (b.lastReviewedAt || 0));
-      else list.sort((a, b) => b.savedAt - a.savedAt);
+      if (this.mode === 'review') {
+        const order = this.reviewOrder;
+        list.sort((a, b) => {
+          const ia = order.indexOf(a.id), ib = order.indexOf(b.id);
+          return (ia < 0 ? Number.MAX_SAFE_INTEGER : ia) - (ib < 0 ? Number.MAX_SAFE_INTEGER : ib);
+        });
+      } else {
+        list.sort((a, b) => b.savedAt - a.savedAt);
+      }
       return list;
     },
     cardTags(c) {
@@ -283,6 +310,13 @@ function glossaryApp() {
     savedThisWeek() {
       const weekAgo = Date.now() - 7 * 24 * 3600 * 1000;
       return this.cards.filter(c => c.savedAt > weekAgo).length;
+    },
+    footerText() {
+      const v = this.visibleCards().length, t = this.cards.length;
+      const base = (v === t)
+        ? `${t} card${t === 1 ? '' : 's'}`
+        : `${v} of ${t} cards shown`;
+      return `${base} · ${this.savedThisWeek()} saved this week`;
     },
     deleteCard(id) {
       if (!confirm('Delete this flashcard and all its highlights?')) return;

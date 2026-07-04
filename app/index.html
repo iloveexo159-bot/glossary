@@ -211,8 +211,7 @@
       </template>
     </div>
 
-    <div class="book-footer caption" x-show="cards.length"
-         x-text="'Card ' + Math.min(1, visibleCards().length) + '–' + visibleCards().length + ' of ' + cards.length + ' · ' + savedThisWeek() + ' saved this week'"></div>
+    <div class="book-footer caption" x-show="cards.length" x-text="footerText()"></div>
   </section>
 
   <!-- ============ DETAIL ============ -->
