@@ -43,7 +43,7 @@ function glossaryApp() {
     detailId: null,
     toolbar: { show: false, x: 0, y: 0, text: '', context: 'results' },
     noteDialog: { show: false, quote: '', text: '', tags: [], tagInput: '', highlightId: null, cardId: null },
-    cardTagInput: '',
+    cardDialog: { show: false, cardId: null, note: '', tags: [], tagInput: '' },
     exportSheet: false,
     prefs: { theme: 'light', brightness: 20, warmth: 0, fontScale: 1 },
     devices: [], pairCode: '', enterCode: '',
@@ -92,14 +92,21 @@ function glossaryApp() {
       if (this.page === 'detail') this.nav('cards');
       else this.nav('home');
     },
-    closeTransient() { this.showDropdown = false; this.toolbar.show = false; },
+    closeTransient() {
+      this.showDropdown = false;
+      // Bug fix: a mouse drag-select ends with a click event that bubbles here —
+      // don't hide the selection toolbar while a text selection is still active,
+      // or it disappears the same frame it was shown.
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed) this.toolbar.show = false;
+    },
     onKeydown(e) {
       const typing = ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName);
       if (e.key === '/' && !typing) { e.preventDefault(); this.focusSearch(); }
       if (e.key === 'Escape') { this.showDropdown = false; this.toolbar.show = false; }
     },
     focusSearch() {
-      const el = document.getElementById('search-input');
+      const el = document.getElementById(this.page === 'home' ? 'search-home' : 'search-top');
       if (el && (this.page === 'home' || this.page === 'results')) el.focus();
     },
 
@@ -212,14 +219,9 @@ function glossaryApp() {
       return this.cards.find(c => c.title.toLowerCase() === String(title).toLowerCase());
     },
     alreadySaved() { return this.result && !!this.findByTitle(this.result.title); },
-    saveCard() {
-      if (!this.result) return;
-      const existing = this.findByTitle(this.result.title);
-      if (existing) {
-        this.showToast('Already saved — opening existing card');
-        this.nav('card', existing.id);
-        return existing;
-      }
+    resultCard() { return this.result ? this.findByTitle(this.result.title) || null : null; },
+    createCardFromResult() {
+      if (!this.result) return null;
       const card = {
         id: uid(),
         title: this.result.title,
@@ -228,14 +230,61 @@ function glossaryApp() {
         revision: this.result.revision,
         savedAt: Date.now(),
         lastReviewedAt: null,
+        note: '',
         tags: [],
         highlights: [],
         drifted: false,
       };
       this.cards.push(card);
       this.persistCards();
-      this.showToast('✓ Saved to flashcards');
       return card;
+    },
+    /* Bookmark icon: the single save control. First click saves the card and
+       opens the note+tags dialog; when already saved it reopens the dialog. */
+    toggleSaveIcon(context) {
+      let card = context === 'results' ? this.resultCard() : this.currentCard();
+      if (!card && context === 'results') {
+        card = this.createCardFromResult();
+        if (card) this.showToast('✓ Saved to flashcards');
+      }
+      if (card) this.openCardDialog(card.id);
+    },
+    openCardDialog(id) {
+      const c = this.cards.find(x => x.id === id);
+      if (!c) return;
+      this.cardDialog = { show: true, cardId: id, note: c.note || '', tags: [...(c.tags || [])], tagInput: '' };
+      this.$nextTick(() => this.$refs.cardNoteText && this.$refs.cardNoteText.focus());
+    },
+    cardDialogTitle() {
+      const c = this.cards.find(x => x.id === this.cardDialog.cardId);
+      return c ? c.title : 'Note & tags';
+    },
+    closeCardDialog(save) {
+      if (save) {
+        const c = this.cards.find(x => x.id === this.cardDialog.cardId);
+        if (c) {
+          const pending = this.cardDialog.tagInput.trim().replace(/^#/, '');
+          if (pending) this.cardDialog.tags.push(pending);
+          c.note = this.cardDialog.note.trim();
+          c.tags = [...new Set(this.cardDialog.tags)];
+          this.persistCards();
+          this.showToast('✓ Note & tags saved');
+        }
+      }
+      this.cardDialog.show = false;
+    },
+    /* DELETE in the dialog unsaves the whole card (icon unshades);
+       confirm first when highlights would be lost with it. */
+    deleteFromCardDialog() {
+      const c = this.cards.find(x => x.id === this.cardDialog.cardId);
+      if (!c) { this.cardDialog.show = false; return; }
+      const n = (c.highlights || []).length;
+      if (n > 0 && !confirm(`Delete "${c.title}"? Its ${n} highlight${n === 1 ? '' : 's'} will be lost too.`)) return;
+      this.cards = this.cards.filter(x => x.id !== c.id);
+      this.persistCards();
+      this.cardDialog.show = false;
+      this.showToast('Card deleted');
+      if (this.page === 'detail') this.nav('cards');
     },
     persistCards() { lsSet(LS.cards, this.cards); },
     currentCard() { return this.cards.find(c => c.id === this.detailId) || null; },
@@ -414,7 +463,7 @@ function glossaryApp() {
       if (!text) return;
       let card;
       if (context === 'results') {
-        card = this.findByTitle(this.result?.title) || this.saveCard();
+        card = this.resultCard() || this.createCardFromResult();
         if (!card) return;
       } else {
         card = this.currentCard();
@@ -498,30 +547,17 @@ function glossaryApp() {
 
     /* ---------- tags ---------- */
     onTagKeydown(e, target) {
+      const dlg = target === 'note' ? this.noteDialog : this.cardDialog;
       const isCommit = e.key === ' ' || e.key === 'Enter' || e.key === ',';
-      const input = target === 'note' ? this.noteDialog.tagInput : this.cardTagInput;
       if (isCommit) {
         e.preventDefault();
-        const tag = input.trim().replace(/^#/, '').replace(/\s+/g, '-');
+        const tag = dlg.tagInput.trim().replace(/^#/, '').replace(/\s+/g, '-');
         if (!tag) return;
-        if (target === 'note') {
-          if (!this.noteDialog.tags.includes(tag)) this.noteDialog.tags.push(tag);
-          this.noteDialog.tagInput = '';
-        } else {
-          const c = this.currentCard();
-          if (c && !c.tags.includes(tag)) { c.tags.push(tag); this.persistCards(); }
-          this.cardTagInput = '';
-        }
-      } else if (e.key === 'Backspace' && input === '') {
-        if (target === 'note') this.noteDialog.tags.pop();
-        else { const c = this.currentCard(); if (c) { c.tags.pop(); this.persistCards(); } }
+        if (!dlg.tags.includes(tag)) dlg.tags.push(tag);
+        dlg.tagInput = '';
+      } else if (e.key === 'Backspace' && dlg.tagInput === '') {
+        dlg.tags.pop();
       }
-    },
-    removeCardTag(t) {
-      const c = this.currentCard();
-      if (!c) return;
-      c.tags = c.tags.filter(x => x !== t);
-      this.persistCards();
     },
 
     /* ---------- export ---------- */
@@ -538,6 +574,7 @@ function glossaryApp() {
       let body = `# ${c.title}\n\n`;
       if (c.image) body += `![${c.title}](${imagePath || c.image})\n\n`;
       body += c.extract + '\n';
+      if (c.note) body += `\n## My note\n\n${c.note}\n`;
       if (c.highlights.length) {
         body += '\n## Highlights\n';
         c.highlights.forEach(h => {
@@ -642,6 +679,7 @@ function glossaryApp() {
         id: uid(),
         title: raw.title.trim(),
         extract: typeof raw.extract === 'string' ? raw.extract : '',
+        note: typeof raw.note === 'string' ? raw.note : '',
         image: (typeof raw.image === 'string' && /^https:\/\/upload\.wikimedia\.org\//.test(raw.image)) ? raw.image : null,
         revision: num(raw.revision),
         savedAt: num(raw.savedAt) || Date.now(),

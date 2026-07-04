@@ -24,10 +24,10 @@
 
   <button class="brand" x-show="page!=='home'" @click="nav('home')" x-cloak>Glossary</button>
 
-  <!-- Wikipedia search (home + results) -->
-  <div class="search-wrap" x-show="page==='home' || page==='results'" @click.stop>
+  <!-- Wikipedia search (results only — home uses the centered hero search) -->
+  <div class="search-wrap" x-show="page==='results'" x-cloak @click.stop>
     <svg class="icon-lead" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
-    <input id="search-input" class="input-search" type="text" autocomplete="off"
+    <input id="search-top" class="input-search" type="text" autocomplete="off"
            placeholder="Search Wikipedia" aria-label="Search Wikipedia"
            x-model="query" @input="onQueryInput()" @focus="onSearchFocus()"
            @keydown.enter.prevent="submitFromInput()"
@@ -73,7 +73,7 @@
     <button class="icon-clear" x-show="cardSearch.length > 0" @click="cardSearch=''" aria-label="Clear search" x-cloak>✕</button>
   </div>
 
-  <span style="flex:1;" x-show="page==='detail' || page==='settings' || page==='pairing'" x-cloak></span>
+  <span style="flex:1;" x-show="page==='home' || page==='detail' || page==='settings' || page==='pairing'"></span>
 
   <nav class="top-links" aria-label="Primary">
     <a href="#/home" :class="{ active: page==='home' || page==='results' }">Home</a>
@@ -91,6 +91,29 @@
     <div class="home-hero">
       <h1 class="wordmark">Glossary</h1>
       <p class="tagline">Look it up. Save it. Back to your book.</p>
+      <!-- Centered hero search (Google-homepage style); dropdown shows suggestions only —
+           recent searches already live directly below on this page -->
+      <div class="search-wrap" @click.stop>
+        <svg class="icon-lead" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+        <input id="search-home" class="input-search" type="text" autocomplete="off"
+               placeholder="Search Wikipedia" aria-label="Search Wikipedia"
+               x-model="query" @input="onQueryInput()" @focus="onSearchFocus()"
+               @keydown.enter.prevent="submitFromInput()"
+               @keydown.down.prevent="moveSug(1)" @keydown.up.prevent="moveSug(-1)"
+               @keydown.escape="closeSearch()">
+        <button class="icon-clear" x-show="query.length > 0" @click="clearSearch()" aria-label="Clear search" x-cloak>✕</button>
+        <div class="dropdown" x-show="showDropdown && query.trim().length > 0" x-cloak>
+          <template x-for="(s, i) in suggestions" :key="s.title">
+            <button class="row" :class="{ active: i === activeSug }" @click="submitSearch(s.title)">
+              <span x-text="s.title"></span>
+              <small x-show="s.description" x-text="s.description"></small>
+            </button>
+          </template>
+          <div class="empty" x-show="suggestions.length === 0 && !sugLoading">
+            No article matches "<span x-text="query"></span>" — check the spelling or try a broader term.
+          </div>
+        </div>
+      </div>
     </div>
     <div class="recent-list">
       <div class="head">
@@ -134,9 +157,14 @@
       </div>
 
       <article x-show="resultState==='ok'" x-cloak>
-        <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+        <div style="display:flex;align-items:flex-start;gap:0.75rem;">
           <h1 class="page-title" style="margin-bottom:0.5rem;" x-text="result?.title"></h1>
-          <span class="badge-drift" x-show="alreadySaved()" x-cloak>Saved</span>
+          <button class="icon-btn bookmark-btn" :class="{ saved: alreadySaved() }" style="margin-left:auto;"
+                  @click="toggleSaveIcon('results')"
+                  :aria-label="alreadySaved() ? 'Saved — edit note and tags' : 'Save as flashcard'"
+                  :aria-pressed="alreadySaved()">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4.5L5 21V4a1 1 0 0 1 1-1z"/></svg>
+          </button>
         </div>
         <img class="result-img" x-show="result?.image" :src="result?.image" :alt="result?.title" x-cloak>
         <div class="extract" :class="{ collapsed: !expanded && isLong() }"
@@ -145,8 +173,29 @@
         <button class="btn-text" x-show="isLong()" @click="expanded = !expanded" x-text="expanded ? 'SHOW LESS' : 'SHOW MORE'" x-cloak></button>
         <p class="credit">via Wikipedia · text available under CC BY-SA</p>
         <div class="result-actions">
-          <button class="btn-primary" @click="saveCard()" x-text="alreadySaved() ? 'Open flashcard' : 'Save as flashcard'"></button>
-          <span class="muted" style="font-size:var(--type-label-size);">or select text to highlight &amp; save</span>
+          <button class="btn-primary" x-show="alreadySaved()" x-cloak @click="nav('card', resultCard().id)">Open flashcard</button>
+          <span class="muted" style="font-size:var(--type-label-size);"
+                x-text="alreadySaved() ? 'Select text to highlight & save' : 'Tap the bookmark to save, or select text to highlight & save'"></span>
+        </div>
+
+        <!-- Highlights & notes — appears right here once the card has annotations -->
+        <div x-show="resultCard() && (resultCard().highlights.length || resultCard().note || resultCard().tags.length)" x-cloak>
+          <h2 class="heading">Highlights &amp; notes</h2>
+          <p class="card-note" x-show="resultCard()?.note" x-text="resultCard()?.note"></p>
+          <div class="chip-row" x-show="resultCard()?.tags.length" style="margin-bottom:var(--space-md);">
+            <template x-for="t in (resultCard()?.tags || [])" :key="t"><span class="chip-tag" x-text="'#' + t"></span></template>
+          </div>
+          <template x-for="h in (resultCard()?.highlights || [])" :key="h.id">
+            <div class="hl-item">
+              <blockquote x-text="'“' + h.text + '”'"></blockquote>
+              <p class="note-text" x-show="h.note" x-text="h.note"></p>
+              <div class="chip-row">
+                <template x-for="t in h.tags" :key="t"><span class="chip-tag" x-text="'#' + t"></span></template>
+                <button class="btn-text" @click="openNoteDialog(h.id)">EDIT</button>
+                <button class="btn-text" @click="removeHighlight(h.id)">REMOVE</button>
+              </div>
+            </div>
+          </template>
         </div>
       </article>
     </div>
@@ -218,28 +267,26 @@
   <section x-show="page==='detail'" x-cloak>
     <template x-if="currentCard()">
       <div class="reading-col">
-        <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+        <div style="display:flex;align-items:flex-start;gap:0.75rem;">
           <h1 class="page-title" style="margin-bottom:0.5rem;" x-text="currentCard().title"></h1>
-          <span class="badge-drift" x-show="currentCard().drifted" x-cloak>Updated on Wikipedia</span>
+          <span class="badge-drift" x-show="currentCard().drifted" x-cloak style="margin-top:0.75rem;">Updated on Wikipedia</span>
+          <button class="icon-btn bookmark-btn saved" style="margin-left:auto;"
+                  @click="toggleSaveIcon('detail')" aria-label="Edit note and tags" aria-pressed="true">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4.5L5 21V4a1 1 0 0 1 1-1z"/></svg>
+          </button>
         </div>
         <div class="detail-meta">
           <span class="caption" x-text="cardMeta(currentCard())"></span>
           <button class="btn-text" @click="deleteCard(currentCard().id)">DELETE CARD</button>
         </div>
+        <p class="card-note" x-show="currentCard().note" x-text="currentCard().note"></p>
+        <div class="chip-row" x-show="currentCard().tags.length" style="margin-bottom:var(--space-base);">
+          <template x-for="t in currentCard().tags" :key="t"><span class="chip-tag" x-text="'#' + t"></span></template>
+        </div>
 
         <img class="result-img" x-show="currentCard().image" :src="currentCard().image" :alt="currentCard().title" x-cloak>
         <div class="extract" @mouseup="onTextMouseUp($event, 'detail')" x-html="detailExtractHtml()"></div>
         <p class="credit">via Wikipedia · text available under CC BY-SA · saved copy — never updates on its own</p>
-
-        <h2 class="heading">Card tags</h2>
-        <div class="input-tags" style="max-width:420px;">
-          <template x-for="t in currentCard().tags" :key="t">
-            <span class="chip-tag">#<span x-text="t"></span><button class="x" @click="removeCardTag(t)" :aria-label="'Remove tag ' + t">✕</button></span>
-          </template>
-          <input x-model="cardTagInput" list="all-tags"
-                 placeholder="Add a tag, space to confirm" aria-label="Add card tag"
-                 @keydown="onTagKeydown($event, 'card')">
-        </div>
 
         <h2 class="heading">Highlights &amp; notes</h2>
         <p class="muted" x-show="!currentCard().highlights.length" style="font-family:var(--font-sans);">
@@ -369,6 +416,28 @@
       <button class="btn-text" @click="deleteFromDialog()">DELETE</button>
       <button class="btn-text" @click="closeNoteDialog(false)">CANCEL</button>
       <button class="btn-text strong" @click="closeNoteDialog(true)">SAVE</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ CARD NOTE & TAGS DIALOG (bookmark icon) ============ -->
+<div class="scrim" x-show="cardDialog.show" x-cloak @click.self="closeCardDialog(false)" @keydown.escape.window="cardDialog.show && closeCardDialog(false)">
+  <div class="dialog" role="dialog" aria-modal="true" aria-label="Card note and tags">
+    <div class="head"><b x-text="cardDialogTitle()"></b><button class="btn-text" @click="closeCardDialog(false)" aria-label="Close">✕</button></div>
+    <textarea x-model="cardDialog.note" placeholder="Write a note about this term…" aria-label="Card note" x-ref="cardNoteText"></textarea>
+    <label class="field-label caption" for="card-tags">Tags</label>
+    <div class="input-tags">
+      <template x-for="t in cardDialog.tags" :key="t">
+        <span class="chip-tag">#<span x-text="t"></span><button class="x" @click="cardDialog.tags = cardDialog.tags.filter(x => x !== t)" :aria-label="'Remove tag ' + t">✕</button></span>
+      </template>
+      <input id="card-tags" x-model="cardDialog.tagInput" list="all-tags"
+             placeholder="Add a tag, space to confirm" aria-label="Add a tag"
+             @keydown="onTagKeydown($event, 'carddlg')">
+    </div>
+    <div class="actions">
+      <button class="btn-text" @click="deleteFromCardDialog()">DELETE</button>
+      <button class="btn-text" @click="closeCardDialog(false)">CANCEL</button>
+      <button class="btn-text strong" @click="closeCardDialog(true)">SAVE</button>
     </div>
   </div>
 </div>
