@@ -159,6 +159,7 @@
       <article x-show="resultState==='ok'" x-cloak>
         <div style="display:flex;align-items:flex-start;gap:0.75rem;">
           <h1 class="page-title" style="margin-bottom:0.5rem;" x-text="result?.title"></h1>
+          <span class="badge-drift" x-show="resultCard()?.drifted" x-cloak style="margin-top:0.75rem;">Updated on Wikipedia</span>
           <button class="icon-btn bookmark-btn" :class="{ saved: alreadySaved() }" style="margin-left:auto;"
                   @click="toggleSaveIcon('results')"
                   :aria-label="alreadySaved() ? 'Saved — edit note and tags' : 'Save as flashcard'"
@@ -173,17 +174,22 @@
         <button class="btn-text" x-show="isLong()" @click="expanded = !expanded" x-text="expanded ? 'SHOW LESS' : 'SHOW MORE'" x-cloak></button>
         <p class="credit">via Wikipedia · text available under CC BY-SA</p>
         <div class="result-actions">
-          <button class="btn-primary" x-show="alreadySaved()" x-cloak @click="nav('card', resultCard().id)">Open flashcard</button>
+          <button class="btn-primary" x-show="alreadySaved()" x-cloak @click="nav('cards')">View all flashcards</button>
           <span class="muted" style="font-size:var(--type-label-size);"
                 x-text="alreadySaved() ? 'Select text to highlight & save' : 'Tap the bookmark to save, or select text to highlight & save'"></span>
         </div>
 
-        <!-- Highlights & notes — appears right here once the card has annotations -->
+        <!-- Highlights & notes — appears right here once the card has annotations.
+             Card-level note+tags render as the same white card as highlights. -->
         <div x-show="resultCard() && (resultCard().highlights.length || resultCard().note || resultCard().tags.length)" x-cloak>
           <h2 class="heading">Highlights &amp; notes</h2>
-          <p class="card-note" x-show="resultCard()?.note" x-text="resultCard()?.note"></p>
-          <div class="chip-row" x-show="resultCard()?.tags.length" style="margin-bottom:var(--space-md);">
-            <template x-for="t in (resultCard()?.tags || [])" :key="t"><span class="chip-tag" x-text="'#' + t"></span></template>
+          <div class="hl-item" x-show="resultCard()?.note || resultCard()?.tags.length">
+            <div class="caption" style="margin-bottom:var(--space-sm);">Card note</div>
+            <p class="note-text" x-show="resultCard()?.note" x-text="resultCard()?.note"></p>
+            <div class="chip-row">
+              <template x-for="t in (resultCard()?.tags || [])" :key="t"><span class="chip-tag" x-text="'#' + t"></span></template>
+              <button class="btn-text" @click="openCardDialog(resultCard().id)">EDIT</button>
+            </div>
           </div>
           <template x-for="h in (resultCard()?.highlights || [])" :key="h.id">
             <div class="hl-item">
@@ -278,10 +284,7 @@
         <div class="detail-meta">
           <span class="caption" x-text="cardMeta(currentCard())"></span>
           <button class="btn-text" @click="deleteCard(currentCard().id)">DELETE CARD</button>
-        </div>
-        <p class="card-note" x-show="currentCard().note" x-text="currentCard().note"></p>
-        <div class="chip-row" x-show="currentCard().tags.length" style="margin-bottom:var(--space-base);">
-          <template x-for="t in currentCard().tags" :key="t"><span class="chip-tag" x-text="'#' + t"></span></template>
+          <button class="btn-text" x-show="currentCard().drifted" x-cloak @click="updateSavedCopy()">UPDATE SAVED COPY</button>
         </div>
 
         <img class="result-img" x-show="currentCard().image" :src="currentCard().image" :alt="currentCard().title" x-cloak>
@@ -289,7 +292,15 @@
         <p class="credit">via Wikipedia · text available under CC BY-SA · saved copy — never updates on its own</p>
 
         <h2 class="heading">Highlights &amp; notes</h2>
-        <p class="muted" x-show="!currentCard().highlights.length" style="font-family:var(--font-sans);">
+        <div class="hl-item" x-show="currentCard().note || currentCard().tags.length">
+          <div class="caption" style="margin-bottom:var(--space-sm);">Card note</div>
+          <p class="note-text" x-show="currentCard().note" x-text="currentCard().note"></p>
+          <div class="chip-row">
+            <template x-for="t in currentCard().tags" :key="t"><span class="chip-tag" x-text="'#' + t"></span></template>
+            <button class="btn-text" @click="openCardDialog(currentCard().id)">EDIT</button>
+          </div>
+        </div>
+        <p class="muted" x-show="!currentCard().highlights.length && !currentCard().note && !currentCard().tags.length" style="font-family:var(--font-sans);">
           Select any text in the summary above to highlight it — add a note and tags in the popup.
         </p>
         <template x-for="(h, i) in currentCard().highlights" :key="h.id">

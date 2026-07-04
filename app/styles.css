@@ -166,18 +166,13 @@ main { max-width: 900px; margin: 0 auto; padding: var(--space-lg) var(--space-ba
 .home-hero .tagline { color: var(--color-text-secondary); margin-top: var(--space-sm); font-size: var(--type-ui-size); }
 .home-hero .search-wrap { flex: none; margin: var(--space-xl) auto 0; text-align: left; }
 
-/* Bookmark save toggle: outline = unsaved, filled = saved */
-.bookmark-btn svg { width: 1.375rem; height: 1.375rem; }
+/* Bookmark save toggle: outline = unsaved, filled = saved.
+   Sized to match the page title it sits beside. */
+.bookmark-btn svg { width: var(--type-title-size); height: var(--type-title-size); }
 .bookmark-btn svg path { fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; }
 .bookmark-btn.saved { color: var(--color-text-primary); }
 .bookmark-btn.saved svg path { fill: currentColor; }
 
-.card-note {
-  font-family: var(--font-serif); font-size: var(--type-body-size); line-height: var(--type-body-lh);
-  color: var(--color-text-secondary);
-  border-left: 3px solid var(--color-border-strong); padding-left: var(--space-md);
-  margin: var(--space-md) 0;
-}
 .recent-list { max-width: 560px; margin: 0 auto; }
 .recent-list .head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--space-sm); }
 .recent-list .row {

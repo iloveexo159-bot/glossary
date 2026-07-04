@@ -191,6 +191,7 @@ function glossaryApp() {
         };
         this.resultState = 'ok';
         this.pushRecent(data.title); // only successful lookups, canonical title (QA bug 7)
+        this.checkDrift(this.findByTitle(data.title), this.result); // PRD: passive Wikipedia-drift detection
         cache[data.title.toLowerCase()] = { ...this.result, ts: Date.now() };
         cache[term.toLowerCase()] = cache[data.title.toLowerCase()];
         const keys = Object.keys(cache);
@@ -308,6 +309,45 @@ function glossaryApp() {
     markReviewed(id) {
       const c = this.cards.find(x => x.id === id);
       if (c) { c.lastReviewedAt = Date.now(); this.persistCards(); }
+    },
+    /* PRD drift model: the saved copy never changes on its own. On lookup we
+       compare the live summary against the frozen copy; a meaningful change
+       (extract text differs) sets a passive flag and stashes the live version
+       for the reader to pull in manually via updateSavedCopy(). Revision-id
+       alone isn't used — an edit elsewhere in the article can bump the revid
+       without touching the summary we actually saved. */
+    checkDrift(card, live) {
+      if (!card || !live || !live.extract) return;
+      const changed = live.extract !== card.extract || (live.image || null) !== (card.image || null);
+      if (changed) {
+        card.drifted = true;
+        card.pendingUpdate = { extract: live.extract, image: live.image || null, revision: live.revision || null };
+      } else if (card.drifted) {
+        card.drifted = false; // saved copy now matches live again (e.g. after an update)
+        delete card.pendingUpdate;
+      }
+      this.persistCards();
+    },
+    updateSavedCopy() {
+      const c = this.currentCard();
+      if (!c || !c.pendingUpdate) return;
+      c.extract = c.pendingUpdate.extract;
+      c.image = c.pendingUpdate.image;
+      c.revision = c.pendingUpdate.revision;
+      c.drifted = false;
+      delete c.pendingUpdate;
+      // re-anchor highlights to the new text; ones whose text no longer exists
+      // keep their data but won't render until re-added
+      let lost = 0;
+      (c.highlights || []).forEach(h => {
+        const idx = c.extract.indexOf(h.text);
+        h.start = idx >= 0 ? idx : null;
+        if (idx < 0) lost += 1;
+      });
+      this.persistCards();
+      this.showToast(lost
+        ? `✓ Updated — ${lost} highlight${lost === 1 ? '' : 's'} no longer match the new text`
+        : '✓ Saved copy updated to the latest Wikipedia version');
     },
     /* Review order is frozen when entering review mode: flipping a card updates
        its reviewed timestamp but the deck doesn't re-sort under the reader —
