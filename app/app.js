@@ -257,7 +257,7 @@ function glossaryApp() {
           (c.highlights || []).some(h => (h.tags || []).includes(this.tagFilter)));
       }
       const q = this.cardSearch.trim().toLowerCase();
-      if (q) list = list.filter(c => c.title.toLowerCase().includes(q) || c.extract.toLowerCase().includes(q));
+      if (q) list = list.filter(c => (c.title || '').toLowerCase().includes(q) || (c.extract || '').toLowerCase().includes(q));
       if (this.mode === 'review') list.sort((a, b) => (a.lastReviewedAt || 0) - (b.lastReviewedAt || 0));
       else list.sort((a, b) => b.savedAt - a.savedAt);
       return list;
@@ -293,19 +293,31 @@ function glossaryApp() {
     },
 
     /* ---------- highlight rendering ---------- */
+    /* Highlights carry a character offset (h.start) into the source extract.
+       Rendering walks the text left→right by position, so repeated phrases
+       mark the right occurrence and note markers number in reading order.
+       Every interpolated value is escaped — ids included (import path). */
     renderExtract(text, highlights) {
-      let html = escapeHtml(text || '');
-      const sorted = [...(highlights || [])].sort((a, b) => b.text.length - a.text.length);
-      sorted.forEach((h) => {
-        const needle = escapeHtml(h.text);
-        if (!html.includes(needle)) return;
-        const n = (highlights || []).indexOf(h) + 1;
-        const marker = h.note
-          ? `<button class="note-marker" data-hl="${h.id}" aria-label="Open note ${n}">${n}</button>`
-          : '';
-        html = html.replace(needle,
-          `<mark class="hl" data-hl="${h.id}" role="button" tabindex="0" aria-label="Highlight ${n}">${needle}</mark>${marker}`);
-      });
+      const t = String(text || '');
+      const placed = (highlights || []).map(h => {
+        let start = (typeof h.start === 'number') ? h.start : -1;
+        if (start < 0 || t.slice(start, start + h.text.length) !== h.text) {
+          start = t.indexOf(h.text); // legacy highlights without offsets
+        }
+        return { h, start };
+      }).filter(p => p.start >= 0).sort((a, b) => a.start - b.start);
+
+      let html = '', pos = 0, n = 0;
+      for (const { h, start } of placed) {
+        if (start < pos) continue; // overlap safety — skip rather than corrupt markup
+        n += 1;
+        const safeId = escapeHtml(h.id);
+        html += escapeHtml(t.slice(pos, start));
+        html += `<mark class="hl" data-hl="${safeId}" role="button" tabindex="0" aria-label="Highlight ${n}">${escapeHtml(h.text)}</mark>`;
+        if (h.note) html += `<button class="note-marker" data-hl="${safeId}" aria-label="Open note ${n}">${n}</button>`;
+        pos = start + h.text.length;
+      }
+      html += escapeHtml(t.slice(pos));
       return html;
     },
     resultExtractHtml() {
@@ -319,23 +331,47 @@ function glossaryApp() {
     },
 
     /* ---------- selection → highlight ---------- */
+    /* Selections are mapped back to character offsets in the SOURCE extract.
+       Injected note-marker digits are stripped from both the selected text
+       and the offset calculation, so selecting across an existing highlight
+       can't capture stray "1"s that would never match the source again. */
+    getTextOffset(container, node, nodeOffset) {
+      const range = document.createRange();
+      range.selectNodeContents(container);
+      try { range.setEnd(node, nodeOffset); } catch { return -1; }
+      const frag = range.cloneContents();
+      frag.querySelectorAll('.note-marker').forEach(el => el.remove());
+      return frag.textContent.length;
+    },
+    cleanSelectionText(range) {
+      const frag = range.cloneContents();
+      frag.querySelectorAll('.note-marker').forEach(el => el.remove());
+      return frag.textContent;
+    },
     onTextMouseUp(e, context) {
       // click on an existing highlight/marker opens its note
       const hlEl = e.target.closest && e.target.closest('[data-hl]');
       if (hlEl) { this.openNoteDialog(hlEl.dataset.hl); return; }
       const sel = window.getSelection();
-      const text = sel ? sel.toString().trim() : '';
-      if (!text || text.length < 2) { this.toolbar.show = false; return; }
-      const rect = sel.getRangeAt(0).getBoundingClientRect();
+      if (!sel || sel.rangeCount === 0 || sel.isCollapsed) { this.toolbar.show = false; return; }
+      const range = sel.getRangeAt(0);
+      const container = e.currentTarget;
+      if (!container.contains(range.commonAncestorContainer)) { this.toolbar.show = false; return; }
+      const raw = this.cleanSelectionText(range);
+      const text = raw.trim();
+      if (text.length < 2) { this.toolbar.show = false; return; }
+      let start = this.getTextOffset(container, range.startContainer, range.startOffset);
+      if (start >= 0) start += raw.length - raw.trimStart().length; // account for trimmed leading space
+      const rect = range.getBoundingClientRect();
       this.toolbar = {
-        show: true, context, text,
+        show: true, context, text, start,
         x: rect.left + rect.width / 2 + window.scrollX,
         y: rect.top + window.scrollY - 52,
       };
     },
     confirmHighlight(withNote) {
-      const text = this.toolbar.text;
-      const context = this.toolbar.context;
+      const { text, context } = this.toolbar;
+      let start = this.toolbar.start;
       this.toolbar.show = false;
       if (!text) return;
       let card;
@@ -346,7 +382,23 @@ function glossaryApp() {
         card = this.currentCard();
         if (!card) return;
       }
-      const h = { id: uid(), text, note: '', tags: [], createdAt: Date.now() };
+      const source = card.extract || '';
+      // verify the DOM-derived offset against the source; fall back to first match
+      if (typeof start !== 'number' || source.slice(start, start + text.length) !== text) {
+        start = source.indexOf(text);
+      }
+      if (start < 0) { this.showToast("Couldn't match that selection — try again"); return; }
+      const end = start + text.length;
+      const overlaps = (card.highlights || []).some(h => {
+        const hs = (typeof h.start === 'number') ? h.start : source.indexOf(h.text);
+        return hs >= 0 && hs < end && start < hs + h.text.length;
+      });
+      if (overlaps) {
+        this.showToast('That overlaps an existing highlight');
+        window.getSelection()?.removeAllRanges();
+        return;
+      }
+      const h = { id: uid(), text, start, note: '', tags: [], createdAt: Date.now() };
       card.highlights.push(h);
       this.persistCards();
       if (withNote) {
@@ -510,6 +562,35 @@ function glossaryApp() {
       const data = { cards: this.cards, exportedAt: new Date().toISOString(), app: 'Glossary' };
       this.downloadBlob(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }), 'glossary-backup.json');
     },
+    /* Imported backups are untrusted input: every card is rebuilt field-by-field
+       (ids regenerated, types coerced, image URLs allowlisted) — never pushed verbatim. */
+    sanitizeHighlight(raw) {
+      if (!raw || typeof raw.text !== 'string' || !raw.text.trim()) return null;
+      return {
+        id: uid(),
+        text: raw.text,
+        start: (typeof raw.start === 'number' && raw.start >= 0) ? raw.start : null,
+        note: typeof raw.note === 'string' ? raw.note : '',
+        tags: Array.isArray(raw.tags) ? raw.tags.filter(t => typeof t === 'string' && t.trim()).map(t => t.trim()) : [],
+        createdAt: (typeof raw.createdAt === 'number') ? raw.createdAt : Date.now(),
+      };
+    },
+    sanitizeCard(raw) {
+      if (!raw || typeof raw.title !== 'string' || !raw.title.trim()) return null;
+      const num = v => (typeof v === 'number' && isFinite(v)) ? v : null;
+      return {
+        id: uid(),
+        title: raw.title.trim(),
+        extract: typeof raw.extract === 'string' ? raw.extract : '',
+        image: (typeof raw.image === 'string' && /^https:\/\/upload\.wikimedia\.org\//.test(raw.image)) ? raw.image : null,
+        revision: num(raw.revision),
+        savedAt: num(raw.savedAt) || Date.now(),
+        lastReviewedAt: num(raw.lastReviewedAt),
+        tags: Array.isArray(raw.tags) ? raw.tags.filter(t => typeof t === 'string' && t.trim()).map(t => t.trim()) : [],
+        highlights: Array.isArray(raw.highlights) ? raw.highlights.map(h => this.sanitizeHighlight(h)).filter(Boolean) : [],
+        drifted: false,
+      };
+    },
     importJson(e) {
       const file = e.target.files && e.target.files[0];
       if (!file) return;
@@ -520,7 +601,8 @@ function glossaryApp() {
           if (!Array.isArray(data.cards)) throw new Error('bad format');
           let added = 0;
           data.cards.forEach(c => {
-            if (!this.findByTitle(c.title)) { this.cards.push(c); added++; }
+            const clean = this.sanitizeCard(c);
+            if (clean && !this.findByTitle(clean.title)) { this.cards.push(clean); added++; }
           });
           this.persistCards();
           this.showToast(`✓ Imported ${added} card${added === 1 ? '' : 's'}`);
