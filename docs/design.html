@@ -315,6 +315,22 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
   letter-spacing: var(--type-caption-ls); text-transform: uppercase; color: var(--color-text-muted);
   text-align: center; padding: var(--space-base);
 }
+/* bookmark-save: outline = unsaved, filled = saved; sized to the title beside it */
+.bookmark-btn {
+  background: transparent; border: none; cursor: pointer; color: var(--color-text-primary);
+  padding: 0; border-radius: var(--rounded-sm); display: inline-flex; line-height: 0;
+}
+.bookmark-btn svg { width: var(--type-title-size); height: var(--type-title-size); }
+.bookmark-btn svg path { fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; }
+.bookmark-btn.saved svg path { fill: currentColor; }
+.bookmark-btn:hover { outline: 2px solid var(--color-text-primary); outline-offset: 1px; }
+/* saved-item-card: one white container for the card note and every highlight */
+.saved-item-card {
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--rounded-md); padding: var(--space-base); margin-bottom: var(--space-md);
+}
+.saved-item-card blockquote { margin: 0 0 var(--space-sm); font-family: var(--font-serif); font-size: var(--type-body-size); border-left: 3px solid var(--color-highlight); padding-left: var(--space-md); }
+.saved-item-card .note-text { font-family: var(--font-serif); color: var(--color-text-secondary); margin: 0 0 var(--space-sm); }
 .badge-drift {
   display: inline-flex; align-items: center; gap: 0.375rem; padding: 0.25rem 0.625rem;
   font-family: var(--font-sans); font-size: var(--type-caption-size); font-weight: 700;
@@ -391,6 +407,12 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
   <div class="demo-block">
     <div class="demo-label">input-search · pill, leading icon, trailing ✕ (exits to home)</div>
     <div class="search-wrap"><svg class="icon lead" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg><input class="input-search" placeholder="Search Wikipedia" aria-label="Search Wikipedia"><button class="icon trail" aria-label="Clear search">✕</button></div>
+    <div class="demo-label">hero placement · on Home the same field sits centered under the wordmark (Google-style), recent searches beneath</div>
+    <div style="text-align:center;padding:var(--space-lg) 0;">
+      <div style="font-family:var(--font-serif);font-size:var(--type-display-size);font-weight:700;line-height:1.1;">Glossary</div>
+      <div class="note" style="margin:0.25rem 0 var(--space-base);">Look it up. Save it. Back to your book.</div>
+      <div class="search-wrap" style="margin:0 auto;text-align:left;"><svg class="icon lead" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg><input class="input-search" placeholder="Search Wikipedia" aria-label="Search Wikipedia"></div>
+    </div>
     <div class="demo-label">input-search-focus · 2px ink outline</div>
     <div class="search-wrap"><svg class="icon lead" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg><input class="input-search is-focus" value="great wall" aria-label="Search Wikipedia"><button class="icon trail" aria-label="Clear search">✕</button></div>
     <div class="demo-label">dropdown-suggestions · top 5 while typing; plain-language empty state</div>
@@ -455,6 +477,45 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
     </div>
   </div>
 
+  <h3>Saving</h3>
+  <div class="demo-block">
+    <div class="demo-label">bookmark-save · single save control, sized to the title · outline = unsaved, filled = saved</div>
+    <div class="demo-row" style="gap:var(--space-2xl);">
+      <span style="display:inline-flex;align-items:center;gap:var(--space-md);">
+        <span style="font-family:var(--font-serif);font-size:var(--type-title-size);font-weight:700;">Great Wall</span>
+        <button class="bookmark-btn" aria-label="Save"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4.5L5 21V4a1 1 0 0 1 1-1z"/></svg></button>
+        <span class="note">unsaved</span>
+      </span>
+      <span style="display:inline-flex;align-items:center;gap:var(--space-md);">
+        <span style="font-family:var(--font-serif);font-size:var(--type-title-size);font-weight:700;">Great Wall</span>
+        <button class="bookmark-btn saved" aria-label="Saved — edit note and tags"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4.5L5 21V4a1 1 0 0 1 1-1z"/></svg></button>
+        <span class="note">saved</span>
+      </span>
+    </div>
+    <div class="demo-label">dialog-card · opened by the bookmark · card-level note + tags, titled with the term</div>
+    <div class="note-dialog">
+      <div class="head"><b>Great Wall of China</b><button class="btn-text" style="min-height:auto;padding:0.25rem 0.5rem;" aria-label="Close">✕</button></div>
+      <textarea aria-label="Card note">Referenced in Chapter 2 — worth revisiting.</textarea>
+      <label class="field-label" for="card-tags-demo">Tags</label>
+      <div class="input-tags">
+        <span class="chip-tag removable">#history <button class="x" aria-label="Remove tag history">✕</button></span>
+        <input id="card-tags-demo" placeholder="Add a tag, space to confirm" aria-label="Add a tag">
+      </div>
+      <div class="actions" style="margin-top:var(--space-md);"><button class="btn-text">DELETE</button><button class="btn-text">CANCEL</button><button class="btn-text" style="color:var(--color-text-primary);">SAVE</button></div>
+    </div>
+    <div class="demo-label">saved-item-card · one white container for the card note and every highlight, under "Highlights &amp; notes"</div>
+    <div class="saved-item-card">
+      <div style="font-family:var(--font-sans);font-size:var(--type-caption-size);font-weight:700;letter-spacing:var(--type-caption-ls);text-transform:uppercase;color:var(--color-text-muted);margin-bottom:var(--space-sm);">Card note</div>
+      <p class="note-text">Referenced in Chapter 2 — worth revisiting.</p>
+      <div style="display:flex;gap:var(--space-sm);"><span class="chip-tag">#history</span></div>
+    </div>
+    <div class="saved-item-card">
+      <blockquote>"a series of fortifications built across the historical northern borders"</blockquote>
+      <p class="note-text">The scale is the point.</p>
+      <div style="display:flex;gap:var(--space-sm);align-items:center;"><span class="chip-tag">#architecture</span><button class="btn-text">EDIT</button><button class="btn-text">REMOVE</button></div>
+    </div>
+  </div>
+
   <h3>Reading &amp; annotation</h3>
   <div class="demo-block">
     <div class="demo-label">highlight-mark + note-marker · yellow is the page's only hue · the whole highlight is clickable and opens the note (hover shows an ink underline)</div>
@@ -477,9 +538,9 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
 
   <h3>Device chrome</h3>
   <div class="demo-block">
-    <div class="demo-label">nav-top · one bar, three contexts — the search field changes scope, never shape</div>
-    <div class="nav-top-demo"><div class="search-wrap" style="flex:1;"><svg class="icon lead" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg><input class="input-search" style="height:2.25rem;min-height:2.25rem;" placeholder="Search Wikipedia" aria-label="Search Wikipedia"></div><button class="icon-btn" aria-label="Settings">⚙</button></div>
-    <p class="note" style="margin:0.375rem 0;">Home — Wikipedia search + Settings</p>
+    <div class="demo-label">nav-top · three contexts — Home keeps only nav + Settings (search is a centered hero, below); Results and Flashcards carry the search field</div>
+    <div class="nav-top-demo"><span style="font-family:var(--font-serif);font-weight:700;">Glossary</span><span class="spacer"></span><span style="color:var(--color-text-primary);font-weight:700;text-decoration:underline;text-underline-offset:5px;">Home</span><span style="color:var(--color-text-secondary);">Flashcards</span><button class="icon-btn" aria-label="Settings">⚙</button></div>
+    <p class="note" style="margin:0.375rem 0;">Home — nav links + Settings only (no search in the bar)</p>
     <div class="nav-top-demo"><span>←</span><div class="search-wrap" style="flex:1;"><svg class="icon lead" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg><input class="input-search" style="height:2.25rem;min-height:2.25rem;" value="great wall" aria-label="Search Wikipedia"><button class="icon trail" aria-label="Clear search">✕</button></div><button class="icon-btn" aria-label="Settings">⚙</button></div>
     <p class="note" style="margin:0.375rem 0;">Search results — back + Wikipedia search + Settings</p>
     <div class="nav-top-demo"><div class="search-wrap" style="flex:1;"><svg class="icon lead" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg><input class="input-search is-focus" style="height:2.25rem;min-height:2.25rem;" value="ansible" aria-label="Search your flashcards"><button class="icon trail" aria-label="Clear search">✕</button></div><button class="icon-btn" aria-label="Settings">⚙</button></div>
@@ -497,8 +558,8 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
         <span class="end">+</span>
       </div>
     </div>
-    <div class="demo-label">badge-drift · passive "updated on Wikipedia" indicator</div>
-    <div class="demo-row"><span class="badge-drift">◌ Updated on Wikipedia</span></div>
+    <div class="demo-label">badge-drift · passive "updated on Wikipedia" indicator · detail adds a reader-controlled update action</div>
+    <div class="demo-row"><span class="badge-drift">◌ Updated on Wikipedia</span><button class="btn-text">UPDATE SAVED COPY</button></div>
     <div class="demo-label">toast · save confirmation, bottom-center, auto-dismisses</div>
     <div class="demo-row"><span class="toast">✓ Saved to flashcards</span></div>
   </div>
@@ -530,7 +591,7 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
     </div>
   </div>
 
-  <p class="note" style="margin-top:var(--space-2xl);">Glossary design system · mirror of docs/design.md · derived from PRD_WikiSearch_MVP.md + raw-design-system.fig only · 2026-07-03</p>
+  <p class="note" style="margin-top:var(--space-2xl);">Glossary design system · mirror of docs/design.md · derived from PRD_WikiSearch_MVP.md + raw-design-system.fig only · updated 2026-07-04</p>
 </main>
 
 <script>

@@ -116,6 +116,11 @@ components:
     typography: "{typography.label}"
     rounded: "{rounded.sm}"
     padding: 0.5rem 0.75rem
+  bookmark-save:
+    backgroundColor: "transparent"
+    textColor: "{colors.text-primary}"
+    rounded: "{rounded.sm}"
+    size: 2.25rem
   input-search:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.text-primary}"
@@ -178,6 +183,12 @@ components:
     typography: "{typography.title}"
     rounded: "{rounded.md}"
     padding: "{spacing.xl}"
+  saved-item-card:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.text-primary}"
+    typography: "{typography.body}"
+    rounded: "{rounded.md}"
+    padding: "{spacing.base}"
   toolbar-selection:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.text-primary}"
@@ -185,6 +196,12 @@ components:
     rounded: "{rounded.sm}"
     padding: "{spacing.xs}"
   dialog-note:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.text-primary}"
+    typography: "{typography.body}"
+    rounded: "{rounded.sm}"
+    padding: "{spacing.lg}"
+  dialog-card:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.text-primary}"
     typography: "{typography.body}"
@@ -241,7 +258,7 @@ components:
 
 ## Overview
 
-Glossary is a distraction-free Wikipedia lookup and flashcard PWA for physical-book readers, used in stolen seconds mid-chapter on a phone and in longer review sessions on a laptop. The design's job is to feel like a dedicated e-reading device — the Kindle interfaces in the reference imagery — not a website: strictly monochrome, typographic, flat, and calm, so a lookup never becomes browsing. The signature is the device vernacular itself: letterspaced-caps "book footer" progress lines (CARD 3 OF 12), squarer hardware-style dialogs, and the quick-settings brightness/warmth sheet. Two anti-patterns rule everything: never look like a generic web page (colored buttons, gradients, decorative motion), and never suggest a way out (nothing may resemble an outbound link). This system is derived solely from the MVP PRD and the annotated e-reader reference screenshots.
+Glossary is a distraction-free Wikipedia lookup and flashcard PWA for physical-book readers, used in stolen seconds mid-chapter on a phone and in longer review sessions on a laptop. The design's job is to feel like a dedicated e-reading device — the Kindle interfaces in the reference imagery — not a website: strictly monochrome, typographic, flat, and calm, so a lookup never becomes browsing. The signature is the device vernacular itself: letterspaced-caps "book footer" progress lines (CARD 3 OF 12), squarer hardware-style dialogs, the quick-settings brightness/warmth sheet, and a fill-vs-outline bookmark that carries saved state without a word. Two anti-patterns rule everything: never look like a generic web page (colored buttons, gradients, decorative motion), and never suggest a way out (nothing may resemble an outbound link). This system is derived solely from the MVP PRD and the annotated e-reader reference screenshots.
 
 ## Colors
 
@@ -255,7 +272,7 @@ Two families with a strict division of labor: **Literata** — Google's e-book t
 
 ## Layout
 
-Spacing snaps to a 0.25rem-base scale (`xs` through `3xl`); because it is rem-based, rhythm scales with the user's font-size preference. Density is comfortable: reading surfaces pad at `lg`–`xl`, control clusters gap at `sm`–`md`, page sections separate by `xl`–`2xl`. Reading columns cap at 65ch — a book-page measure — centered like a page, with the flashcards grid capped at 900px. The app is one column at every width; what changes between phone and laptop is input method, not layout metaphor (PRD §2.3). On narrow/touch viewports navigation lives in a 3.5rem bottom bar (Home | Flashcards) with an underlined active item; on desktop the same two destinations sit in the 3rem top bar, which persists on results and detail views with a ← back control, per the reference. All interactive targets are at least 44px on touch. Every control is keyboard-reachable with a visible focus state — desktop is a first-class input path, not scaled-up touch.
+Spacing snaps to a 0.25rem-base scale (`xs` through `3xl`); because it is rem-based, rhythm scales with the user's font-size preference. Density is comfortable: reading surfaces pad at `lg`–`xl`, control clusters gap at `sm`–`md`, page sections separate by `xl`–`2xl`. Reading columns cap at 65ch — a book-page measure — centered like a page, with the flashcards grid capped at 900px. The whole app sits inside a frame: the body carries a `clamp(1rem, 5vw, 4rem)` horizontal margin so content never reaches the extreme screen edge — margins only, no drawn border, the calm bezel of a reading device. The app is one column at every width; what changes between phone and laptop is input method, not layout metaphor (PRD §2.3). On narrow/touch viewports navigation lives in a 3.5rem bottom bar (Home | Flashcards) with an underlined active item; on desktop the same two destinations sit in the 3rem top bar, which persists on results and detail views with a ← back control, per the reference. All interactive targets are at least 44px on touch. Every control is keyboard-reachable with a visible focus state — desktop is a first-class input path, not scaled-up touch.
 
 ## Elevation & Depth
 
@@ -267,7 +284,7 @@ Three radii, each with a meaning. `full` (pill) marks type-and-tap immediacy: th
 
 ## Components
 
-**Search.** `input-search` is the pill field with a leading search icon and trailing ✕ clear control (annotated in the reference: ✕ exits back to home); focus replaces the hairline with the 2px ink outline (`input-search-focus`). The leading icon is a stroke SVG (not a glyph character, whose baseline alignment is unreliable across fonts), sized 1.125rem and vertically centered. Icon controls — the ✕ clear, the Settings gear — are real buttons, and all of them share one hover/focus affordance: the same 2px ink outline used for keyboard focus, pill-shaped around the icon. `dropdown-suggestions` floats beneath at `shadow-sm` showing the top 5 live matches while typing, per the annotations; a mistyped or unmatched query gets a plain-language error row telling the reader what to try, not a dead end. Recent searches reuse the same panel anatomy with a header row — "Recent searches" plus a CLEAR HISTORY text button — and the empty state reads "There are no recent searches." exactly as the reference does: a statement, not an apology.
+**Search.** `input-search` is the pill field with a leading search icon and trailing ✕ clear control (annotated in the reference: ✕ exits back to home); focus replaces the hairline with the 2px ink outline (`input-search-focus`). On the **Home** page the search is not in the top bar at all: it sits centered under the wordmark as a hero field (Google-homepage style), with recent searches listed directly beneath — so Home's top bar carries only the nav links and Settings gear. The same `input-search` component is reused in all positions; only its placement and placeholder change. The leading icon is a stroke SVG (not a glyph character, whose baseline alignment is unreliable across fonts), sized 1.125rem and vertically centered. Icon controls — the ✕ clear, the Settings gear — are real buttons, and all of them share one hover/focus affordance: the same 2px ink outline used for keyboard focus, pill-shaped around the icon. `dropdown-suggestions` floats beneath at `shadow-sm` showing the top 5 live matches while typing, per the annotations; a mistyped or unmatched query gets a plain-language error row telling the reader what to try, not a dead end. Recent searches reuse the same panel anatomy with a header row — "Recent searches" plus a CLEAR HISTORY text button — and the empty state reads "There are no recent searches." exactly as the reference does: a statement, not an apology.
 
 **Buttons.** `button-primary` is the filled-ink bar (search submit): in a monochrome system, maximum contrast *is* the primary affordance. `button-outline` is the secondary pattern; hovering inverts it to filled. `button-text` is the reference's uppercase dialog action (SAVE · CANCEL · DELETE) — including destructive actions, which are distinguished by wording and a confirm step, never by red.
 
@@ -275,9 +292,11 @@ Three radii, each with a meaning. `full` (pill) marks type-and-tap immediacy: th
 
 **Flashcards.** `card-flashcard` is a `surface` panel with hairline border and `lg` padding: Mulish for the term and metadata, Literata for the summary, tag chips below. Hover deepens the border to `border-strong`, adds `shadow-sm`, and reveals edit/delete controls (always visible on touch). `card-review` is the Review-mode face: the term alone, set in `title`, centered — tap to flip to the summary, tap again for detail. Both modes support the card/list toggle from the reference imagery.
 
+**Saving.** `bookmark-save` is the single save control on the results and detail pages — a bookmark icon sized to the `title` beside it (outline = unsaved, filled = saved). It replaces a labeled "Save" button: in this monochrome system a filled-vs-outline icon carries the saved state at a glance. First click saves the card and opens `dialog-card` — the near-square card-level note + tags dialog (same anatomy as `dialog-note`, titled with the term); clicking the filled bookmark again reopens it to edit. The dialog's DELETE unsaves the whole card (the bookmark returns to outline), confirming first if highlights would be lost with it. Once a card has any note, tags, or highlights, a **Highlights & notes** section renders directly on the result — no need to open the flashcard — where the card note and every highlight share one white container, `saved-item-card`: one consistent "saved item" treatment for everything the reader has kept.
+
 **Annotation.** `toolbar-selection` appears over any text selection: a light `surface` strip with hairline border and `shadow-sm` — matching the reference toolbar — offering two labeled actions, Highlight and Note (highlight + note). `dialog-note` is the near-square note dialog: a "Note" heading set in `heading` (so it always outranks the serif body text, which renders optically larger than sans at equal size) with ✕ close, a borderless textarea, then a separate **Tags** field (`input-tags`) below it, and a right-aligned DELETE · CANCEL · SAVE text-button row. In the tags field, typing a space commits the current text as a `chip-tag-removable` — a bordered monochrome pill with a trailing ✕ that removes it (Backspace on an empty field removes the last chip). The field autocompletes against previously-used tags, per the PRD's guard against near-duplicate tag drift. `highlight-mark` is the yellow wash on saved text, and the entire wash is an interactive target: hovering shows a pointer and a 2px ink underline beneath the highlight, and clicking (or tapping, or Enter when focused) anywhere on it opens the attached note — not just the marker. If a note is attached, a `note-marker` — the tiny numbered square box from the reference — sits superscript at the highlight's end as the visible indicator and an equivalent target.
 
-**Device chrome.** `nav-top` is the persistent 3rem top bar whose contents are contextual, always ending with a Settings gear icon: on **Home** it holds the Wikipedia search field and Settings; on **Search results** a ← back control precedes the same search field and Settings; on the **Flashcards page** the field swaps role to search *saved flashcards* (placeholder "Search your flashcards") with Settings. One bar anatomy, one search-field component, three contexts — the field's placeholder and scope change, never its shape: every context keeps the full anatomy (leading SVG icon, focus ring, trailing ✕ clear when the field has input), including the flashcards search. The gear is an `icon-btn`: a real button with the shared pill 2px-ink hover/focus outline. `nav-bottom` is the mobile 3.5rem two-item bar with underlined active state. `book-footer` is the signature element: a letterspaced-caps progress line in `text-muted` (CARD 3 OF 12 · 2 SAVED THIS WEEK) that gives flashcard browsing and review the cadence of a page footer. `slider-track`/`slider-thumb` build the brightness and warmth controls: a 2px track whose filled side is ink, a 1.5rem bordered thumb, − / + step buttons at the ends, and the current value above the thumb, as in the reference quick-settings sheet; brightness runs on the device's own 1–20 scale. `badge-drift` is the PRD's passive "updated on Wikipedia" indicator: a bordered caption pill in muted ink — noticeable when sought, silent otherwise. `toast` is the inverted-ink save confirmation, bottom-center, auto-dismissing.
+**Device chrome.** `nav-top` is the persistent 3rem top bar whose contents are contextual, always ending with a Settings gear icon: on **Home** it holds the Wikipedia search field and Settings; on **Search results** a ← back control precedes the same search field and Settings; on the **Flashcards page** the field swaps role to search *saved flashcards* (placeholder "Search your flashcards") with Settings. One bar anatomy, one search-field component, three contexts — the field's placeholder and scope change, never its shape: every context keeps the full anatomy (leading SVG icon, focus ring, trailing ✕ clear when the field has input), including the flashcards search. The gear is an `icon-btn`: a real button with the shared pill 2px-ink hover/focus outline. `nav-bottom` is the mobile 3.5rem two-item bar with underlined active state. `book-footer` is the signature element: a letterspaced-caps progress line in `text-muted` (CARD 3 OF 12 · 2 SAVED THIS WEEK) that gives flashcard browsing and review the cadence of a page footer. `slider-track`/`slider-thumb` build the brightness and warmth controls: a 2px track whose filled side is ink, a 1.5rem bordered thumb, − / + step buttons at the ends, and the current value above the thumb, as in the reference quick-settings sheet; brightness runs on the device's own 1–20 scale. `badge-drift` is the PRD's passive "updated on Wikipedia" indicator: a bordered caption pill in muted ink — noticeable when sought, silent otherwise. It appears wherever the frozen saved copy has diverged from live Wikipedia (results and detail). The saved copy never changes on its own; the detail view offers one reader-controlled `button-text` action, **UPDATE SAVED COPY**, that pulls in the live text and re-anchors existing highlights to it, warning via `toast` if any highlight text no longer matches. `toast` is the inverted-ink save confirmation, bottom-center, auto-dismissing.
 
 ## Do's and Don'ts
 
