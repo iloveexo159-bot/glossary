@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Glossary Design System</title>
+<meta name="color-scheme" content="light dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Mulish:wght@400;600;700&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,700;1,7..72,400&display=swap" rel="stylesheet">
+<style>
+/* ============ TOKENS (mirror of docs/design.md frontmatter) ============ */
+:root, [data-theme="light"] {
+  color-scheme: light; /* native surfaces (mobile keyboard, scrollbars, form controls) follow the theme */
+  --color-background: #EEEFEA;
+  --color-surface: #F8F8F5;
+  --color-text-primary: #191918;
+  --color-text-secondary: #54544E;
+  --color-text-muted: #6F6E66;
+  --color-border: #D7D7D0;
+  --color-border-strong: #A9A89E;
+  --color-highlight: #F0E6A8;
+  --btn-primary-hover-bg: #33332F;
+  --shadow-sm: 0 1px 2px rgba(25,25,24,0.10);
+  --shadow-md: 0 6px 20px rgba(25,25,24,0.15);
+}
+[data-theme="dark"] {
+  color-scheme: dark;
+  --color-background: #131312;
+  --color-surface: #1D1D1B;
+  --color-text-primary: #E8E8E2;
+  --color-text-secondary: #A9A8A0;
+  --color-text-muted: #8A897F;
+  --color-border: #343431;
+  --color-border-strong: #4C4C46;
+  --color-highlight: #5A5122;
+  --btn-primary-hover-bg: #C9C9C2;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.45);
+  --shadow-md: 0 6px 20px rgba(0,0,0,0.55);
+}
+:root {
+  /* type — rem-based so --user-font-scale scales everything */
+  --user-font-scale: 1;
+  --font-serif: 'Literata', Georgia, serif;
+  --font-sans: 'Mulish', system-ui, sans-serif;
+  --type-display-size: clamp(2.5rem, 8vw, 3.5rem);   --type-display-lh: 1.1;
+  --type-title-size: clamp(1.75rem, 6vw, 2.25rem);    --type-title-lh: 1.2;
+  --type-heading-size: 1.375rem;    --type-heading-lh: 1.25;
+  --type-body-reading-size: 1.25rem;--type-body-reading-lh: 1.7;
+  --type-body-size: 1rem;           --type-body-lh: 1.6;
+  --type-ui-size: 0.9375rem;        --type-ui-lh: 1.4;
+  --type-label-size: 0.8125rem;     --type-label-lh: 1.35;
+  --type-caption-size: 0.6875rem;   --type-caption-lh: 1.3;  --type-caption-ls: 0.08em;
+  /* rounded */
+  --rounded-none: 0px;
+  --rounded-sm: 4px;
+  --rounded-md: 8px;
+  --rounded-full: 9999px;
+  /* spacing (rem-based 0.25rem grid) */
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 0.75rem;
+  --space-base: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+  --space-3xl: 4rem;
+}
+html { font-size: calc(100% * var(--user-font-scale)); }
+
+/* ============ GUIDE CHROME (neutral, minimal) ============ */
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--color-background);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-lh);
+  padding: var(--space-2xl) var(--space-lg) var(--space-3xl);
+  transition: background .15s, color .15s;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
+main { max-width: 960px; margin: 0 auto; }
+h1 { font-family: var(--font-serif); font-size: var(--type-title-size); line-height: var(--type-title-lh); margin: 0 0 var(--space-sm); }
+h2 { font-family: var(--font-sans); font-size: var(--type-heading-size); line-height: var(--type-heading-lh); margin: var(--space-3xl) 0 var(--space-base); padding-bottom: var(--space-sm); border-bottom: 1px solid var(--color-border); }
+h3 { font-family: var(--font-sans); font-size: var(--type-caption-size); font-weight: 700; letter-spacing: var(--type-caption-ls); text-transform: uppercase; margin: var(--space-xl) 0 var(--space-md); color: var(--color-text-muted); }
+p.lede { color: var(--color-text-secondary); max-width: 640px; }
+.token-name { font-family: ui-monospace, 'Consolas', monospace; font-size: var(--type-label-size); font-weight: 600; }
+.token-val { font-family: ui-monospace, 'Consolas', monospace; font-size: var(--type-caption-size); color: var(--color-text-muted); }
+.note { font-size: var(--type-label-size); color: var(--color-text-muted); }
+code { font-family: ui-monospace, 'Consolas', monospace; font-size: 0.85em; }
+
+button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--color-text-primary); outline-offset: 2px;
+}
+
+.theme-toggle {
+  position: fixed; top: var(--space-base); right: var(--space-base); z-index: 10;
+  background: var(--color-surface); color: var(--color-text-primary);
+  border: 1px solid var(--color-border-strong); border-radius: var(--rounded-full);
+  padding: 0.5rem 1.125rem; font-family: var(--font-sans); font-size: var(--type-label-size); font-weight: 600;
+  cursor: pointer; box-shadow: var(--shadow-sm); min-height: 44px;
+}
+
+/* ============ COLORS ============ */
+.swatch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--space-md); }
+.swatch { border: 1px solid var(--color-border); border-radius: var(--rounded-md); overflow: hidden; background: var(--color-surface); }
+.swatch .chip { height: 68px; display: flex; align-items: center; justify-content: center; font-size: var(--type-label-size); font-weight: 600; }
+.swatch .meta { padding: var(--space-sm) var(--space-md); display: flex; flex-direction: column; gap: 2px; }
+
+/* ============ TYPOGRAPHY ============ */
+.spec-row { display: flex; align-items: baseline; gap: var(--space-lg); padding: var(--space-base) 0; border-bottom: 1px solid var(--color-border); flex-wrap: wrap; }
+.spec-row:last-of-type { border-bottom: none; }
+.spec-row .spec-meta { min-width: 230px; display: flex; flex-direction: column; gap: 2px; }
+
+/* ============ SPACING / RADIUS / ELEVATION ============ */
+.space-row { display: flex; align-items: center; gap: var(--space-base); margin-bottom: var(--space-sm); }
+.space-bar { background: var(--color-text-primary); height: 16px; border-radius: 2px; }
+.radius-row { display: flex; gap: var(--space-lg); flex-wrap: wrap; }
+.radius-box { width: 128px; height: 88px; background: var(--color-surface); border: 1px solid var(--color-border-strong); display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 2px; }
+.elev-row { display: flex; gap: var(--space-lg); flex-wrap: wrap; }
+.elev-card { width: 230px; padding: var(--space-lg); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--rounded-md); }
+.elev-card b { font-family: var(--font-sans); font-size: var(--type-ui-size); }
+
+/* ============ COMPONENTS ============ */
+.demo-block { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--rounded-md); padding: var(--space-lg); margin-bottom: var(--space-base); }
+.demo-row { display: flex; align-items: center; gap: var(--space-base); flex-wrap: wrap; }
+.demo-label { font-size: var(--type-caption-size); font-weight: 700; letter-spacing: var(--type-caption-ls); color: var(--color-text-muted); text-transform: uppercase; margin: var(--space-base) 0 var(--space-sm); }
+.demo-label:first-child { margin-top: 0; }
+
+.btn-primary {
+  background: var(--color-text-primary); color: var(--color-background);
+  font-family: var(--font-sans); font-size: var(--type-ui-size); font-weight: 700;
+  border: none; border-radius: var(--rounded-sm); height: 2.75rem; min-height: 44px; padding: 0 1.5rem; cursor: pointer;
+}
+.btn-primary:hover, .btn-primary.is-hover { background: var(--btn-primary-hover-bg); }
+.btn-outline {
+  background: transparent; color: var(--color-text-primary);
+  font-family: var(--font-sans); font-size: var(--type-label-size); font-weight: 700;
+  border: 2px solid var(--color-text-primary); border-radius: var(--rounded-sm); height: 2.75rem; min-height: 44px; padding: 0 1rem; cursor: pointer;
+}
+.btn-outline:hover, .btn-outline.is-hover { background: var(--color-text-primary); color: var(--color-background); }
+.btn-text {
+  background: transparent; border: none; cursor: pointer;
+  font-family: var(--font-sans); font-size: var(--type-label-size); font-weight: 700;
+  letter-spacing: 0.04em; color: var(--color-text-secondary); padding: 0.5rem 0.75rem; border-radius: var(--rounded-sm); min-height: 44px;
+}
+.btn-text:hover { background: var(--color-background); color: var(--color-text-primary); }
+
+.search-wrap { position: relative; max-width: 480px; }
+.input-search {
+  width: 100%; height: 3rem; min-height: 44px; padding: 0 2.75rem;
+  background: var(--color-surface); color: var(--color-text-primary);
+  font-family: var(--font-sans); font-size: var(--type-ui-size); font-weight: 600;
+  border: 1px solid var(--color-border); border-radius: var(--rounded-full);
+}
+.input-search::placeholder { color: var(--color-text-muted); font-weight: 400; }
+.input-search.is-focus { outline: 2px solid var(--color-text-primary); outline-offset: 2px; }
+.search-wrap .icon { position: absolute; top: 50%; transform: translateY(-50%); color: var(--color-text-muted); }
+.search-wrap .icon.lead { left: 1.125rem; }
+.search-wrap svg.icon.lead { width: 1.125rem; height: 1.125rem; display: block; }
+.search-wrap .icon.trail {
+  right: 0.75rem; cursor: pointer; background: transparent; border: none;
+  padding: 0.25rem 0.375rem; border-radius: var(--rounded-full);
+  font-size: 1rem; line-height: 1; color: var(--color-text-muted);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.search-wrap .icon.trail:hover { outline: 2px solid var(--color-text-primary); outline-offset: 1px; color: var(--color-text-primary); }
+.icon-btn {
+  background: transparent; border: none; cursor: pointer;
+  color: var(--color-text-secondary); font-size: 1.25rem; line-height: 1;
+  padding: 0.375rem; border-radius: var(--rounded-full);
+  min-width: 2.25rem; min-height: 2.25rem;
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.icon-btn:hover { outline: 2px solid var(--color-text-primary); outline-offset: 1px; color: var(--color-text-primary); }
+.dropdown {
+  max-width: 480px; margin-top: var(--space-sm);
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--rounded-md); box-shadow: var(--shadow-sm); padding: var(--space-sm);
+}
+.dropdown .head { display: flex; justify-content: space-between; align-items: center; padding: 0.25rem 0.75rem; font-size: var(--type-label-size); font-weight: 700; }
+.dropdown .row { padding: 0.625rem 0.75rem; border-radius: var(--rounded-sm); font-family: var(--font-sans); font-size: var(--type-ui-size); font-weight: 600; cursor: pointer; }
+.dropdown .row:hover, .dropdown .row.is-active { background: var(--color-background); }
+.dropdown .row small { display: block; color: var(--color-text-muted); font-size: var(--type-caption-size); font-weight: 400; letter-spacing: 0; }
+.dropdown .row.empty { color: var(--color-text-secondary); cursor: default; font-weight: 400; }
+.dropdown .row.empty:hover { background: transparent; }
+
+.chip-filter {
+  display: inline-flex; align-items: center; padding: 0.375rem 0.875rem; cursor: pointer;
+  font-family: var(--font-sans); font-size: var(--type-label-size); font-weight: 600;
+  color: var(--color-text-primary); background: transparent;
+  border: 1px solid var(--color-border-strong); border-radius: var(--rounded-full);
+}
+.chip-filter.is-active { background: var(--color-text-primary); color: var(--color-background); border-color: var(--color-text-primary); }
+.chip-tag {
+  display: inline-flex; padding: 0.1875rem 0.625rem;
+  font-family: var(--font-sans); font-size: var(--type-label-size); font-weight: 600;
+  color: var(--color-text-secondary); background: transparent;
+  border: 1px solid var(--color-border); border-radius: var(--rounded-full);
+}
+.chip-tag.removable { padding-right: 0.375rem; align-items: center; gap: 0.25rem; }
+.chip-tag.removable .x {
+  border: none; background: transparent; cursor: pointer; padding: 0 0.125rem;
+  font-family: var(--font-sans); font-size: var(--type-label-size); font-weight: 700;
+  color: var(--color-text-muted); line-height: 1;
+}
+.chip-tag.removable .x:hover { color: var(--color-text-primary); }
+.input-tags {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.375rem;
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--rounded-sm); padding: 0.375rem 0.5rem; min-height: 2.25rem;
+}
+.input-tags input {
+  flex: 1; min-width: 90px; border: none; background: transparent;
+  font-family: var(--font-sans); font-size: var(--type-label-size); font-weight: 600;
+  color: var(--color-text-primary); padding: 0.125rem;
+}
+.input-tags input::placeholder { color: var(--color-text-muted); font-weight: 400; }
+.input-tags input:focus { outline: none; }
+.input-tags:focus-within { outline: 2px solid var(--color-text-primary); outline-offset: 2px; }
+.field-label { display: block; font-family: var(--font-sans); font-size: var(--type-caption-size); font-weight: 700; letter-spacing: var(--type-caption-ls); text-transform: uppercase; color: var(--color-text-muted); margin-bottom: 0.375rem; }
+
+.flashcard {
+  background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--rounded-md);
+  padding: var(--space-lg); max-width: 330px;
+}
+.flashcard:hover, .flashcard.is-hover { border-color: var(--color-border-strong); box-shadow: var(--shadow-sm); }
+.flashcard .term { font-family: var(--font-sans); font-weight: 700; font-size: var(--type-ui-size); margin-bottom: var(--space-xs); }
+.flashcard .date { font-family: var(--font-sans); font-size: var(--type-caption-size); font-weight: 700; letter-spacing: var(--type-caption-ls); text-transform: uppercase; color: var(--color-text-muted); margin-bottom: var(--space-md); }
+.flashcard .summary { font-family: var(--font-serif); font-size: var(--type-body-size); line-height: var(--type-body-lh); margin-bottom: var(--space-md); }
+.flashcard .tags { display: flex; gap: var(--space-sm); flex-wrap: wrap; }
+.review-card {
+  background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--rounded-md);
+  padding: var(--space-xl); max-width: 330px; min-height: 150px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-md); cursor: pointer;
+}
+.review-card .term-big { font-family: var(--font-serif); font-size: var(--type-title-size); font-weight: 700; line-height: var(--type-title-lh); text-align: center; }
+
+.reading-sample { font-family: var(--font-serif); font-size: var(--type-body-reading-size); line-height: var(--type-body-reading-lh); max-width: 65ch; }
+mark.hl { background: var(--color-highlight); color: var(--color-text-primary); padding: 1px 0; cursor: pointer; }
+mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-primary); }
+.note-marker {
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: var(--font-sans); font-size: var(--type-caption-size); font-weight: 700;
+  border: 1px solid var(--color-text-primary); border-radius: var(--rounded-none);
+  width: 0.875rem; height: 0.875rem; vertical-align: super; margin-left: 2px; cursor: pointer;
+}
+
+.sel-toolbar {
+  display: inline-flex; gap: 2px; padding: var(--space-xs);
+  background: var(--color-surface); border: 1px solid var(--color-border-strong);
+  border-radius: var(--rounded-sm); box-shadow: var(--shadow-sm);
+}
+.sel-toolbar button {
+  background: transparent; border: none; cursor: pointer; min-height: 44px;
+  color: var(--color-text-primary); font-family: var(--font-sans);
+  font-size: var(--type-label-size); font-weight: 700; padding: 0.5rem 0.875rem; border-radius: var(--rounded-sm);
+}
+.sel-toolbar button + button { border-left: 1px solid var(--color-border); border-radius: 0 var(--rounded-sm) var(--rounded-sm) 0; }
+.sel-toolbar button:hover { background: var(--color-background); }
+
+.note-dialog {
+  background: var(--color-surface); border: 1px solid var(--color-border-strong);
+  border-radius: var(--rounded-sm); box-shadow: var(--shadow-md);
+  padding: var(--space-lg); max-width: 440px;
+}
+.note-dialog .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-md); }
+.note-dialog .head b { font-family: var(--font-sans); font-size: var(--type-heading-size); line-height: var(--type-heading-lh); }
+.note-dialog textarea {
+  width: 100%; min-height: 90px; resize: vertical; border: none; background: transparent;
+  font-family: var(--font-serif); font-size: var(--type-body-size); color: var(--color-text-primary);
+  border-bottom: 1px solid var(--color-border); padding: var(--space-sm) 0; margin-bottom: var(--space-md);
+}
+.note-dialog textarea:focus { outline: none; border-bottom-color: var(--color-text-primary); }
+.note-dialog .actions { display: flex; justify-content: flex-end; gap: var(--space-sm); }
+
+.slider-demo { max-width: 420px; }
+.slider-demo .slider-label { font-family: var(--font-sans); font-size: var(--type-ui-size); font-weight: 600; margin-bottom: var(--space-lg); }
+.slider-row { display: flex; align-items: center; gap: var(--space-base); }
+.slider-row .end { font-size: 1.125rem; color: var(--color-text-secondary); font-family: var(--font-sans); user-select: none; }
+.slider-track { position: relative; flex: 1; height: 2px; background: var(--color-border-strong); border-radius: var(--rounded-full); }
+.slider-fill { position: absolute; left: 0; top: 0; height: 2px; background: var(--color-text-primary); border-radius: var(--rounded-full); }
+.slider-thumb {
+  position: absolute; top: 50%; transform: translate(-50%, -50%);
+  width: 1.5rem; height: 1.5rem; border-radius: var(--rounded-full);
+  background: var(--color-surface); border: 1px solid var(--color-border-strong); box-shadow: var(--shadow-sm);
+}
+.slider-value { position: absolute; top: -1.625rem; transform: translateX(-50%); font-family: var(--font-sans); font-size: var(--type-caption-size); font-weight: 700; color: var(--color-text-secondary); }
+
+.nav-top-demo {
+  display: flex; align-items: center; gap: var(--space-base); height: 3rem; max-width: 640px;
+  background: var(--color-background); border: 1px solid var(--color-border); border-radius: var(--rounded-sm);
+  padding: 0 var(--space-base); font-family: var(--font-sans); font-size: var(--type-ui-size); font-weight: 600;
+}
+.nav-top-demo .brand { font-family: var(--font-serif); font-weight: 700; }
+.nav-top-demo .spacer { flex: 1; }
+.nav-bottom {
+  display: flex; max-width: 420px; height: 3.5rem;
+  background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--rounded-md); overflow: hidden;
+}
+.nav-bottom a {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-sans); font-size: var(--type-ui-size); font-weight: 600;
+  color: var(--color-text-secondary); text-decoration: none;
+}
+.nav-bottom a.is-active { color: var(--color-text-primary); font-weight: 700; text-decoration: underline; text-underline-offset: 6px; }
+.nav-bottom a + a { border-left: 1px solid var(--color-border); }
+
+.book-footer {
+  font-family: var(--font-sans); font-size: var(--type-caption-size); font-weight: 700;
+  letter-spacing: var(--type-caption-ls); text-transform: uppercase; color: var(--color-text-muted);
+  text-align: center; padding: var(--space-base);
+}
+.badge-drift {
+  display: inline-flex; align-items: center; gap: 0.375rem; padding: 0.25rem 0.625rem;
+  font-family: var(--font-sans); font-size: var(--type-caption-size); font-weight: 700;
+  letter-spacing: var(--type-caption-ls); text-transform: uppercase;
+  color: var(--color-text-muted); border: 1px solid var(--color-border-strong); border-radius: var(--rounded-full);
+}
+.toast {
+  display: inline-flex; align-items: center; gap: var(--space-sm); padding: 0.75rem 1.25rem;
+  background: var(--color-text-primary); color: var(--color-background);
+  font-family: var(--font-sans); font-size: var(--type-label-size); font-weight: 600;
+  border-radius: var(--rounded-md); box-shadow: var(--shadow-md);
+}
+
+/* ============ DO / DON'T ============ */
+.dd-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-lg); }
+@media (max-width: 700px) { .dd-grid { grid-template-columns: 1fr; } }
+.dd-col { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--rounded-md); padding: var(--space-lg); }
+.dd-col h4 { margin: 0 0 var(--space-md); font-family: var(--font-sans); font-size: var(--type-ui-size); }
+.dd-col ul { margin: 0; padding-left: 1.25rem; display: flex; flex-direction: column; gap: var(--space-sm); font-size: var(--type-label-size); line-height: 1.5; font-family: var(--font-sans); color: var(--color-text-secondary); }
+</style>
+</head>
+<body>
+<button class="theme-toggle" onclick="toggleTheme()">◐ Light / dark</button>
+<main>
+  <h1>Glossary Design System</h1>
+  <p class="lede">A strict-monochrome e-ink design system for Glossary, a distraction-free Wikipedia lookup and flashcard PWA, derived from Kindle e-reader reference imagery.</p>
+  <p class="note">Human-readable mirror of <code>docs/design.md</code> (the source of truth for coding agents). Same tokens, rendered live — toggle the theme top right. The only hue on any page is the highlight yellow.</p>
+
+  <!-- ================= COLORS ================= -->
+  <h2>Colors</h2>
+  <p class="note">Strict monochrome: an ink ramp on e-ink paper, plus one yellow reserved for reader-saved highlights. Every text/background pair meets WCAG AA in both themes. No accent, no red — interaction is contrast; safety is confirmation.</p>
+  <div class="swatch-grid" id="swatches"></div>
+
+  <!-- ================= TYPOGRAPHY ================= -->
+  <h2>Typography</h2>
+  <p class="note">Literata (serif) = everything read. Mulish (sans) = everything operated. All sizes in rem: the font-size setting changes one root variable and the whole app scales.</p>
+  <div class="spec-row"><div class="spec-meta"><span class="token-name">display</span><span class="token-val">Literata 700 · 3.5rem / 1.1 · wordmark only</span></div><div style="font-family:var(--font-serif);font-size:var(--type-display-size);font-weight:700;line-height:var(--type-display-lh);">Glossary</div></div>
+  <div class="spec-row"><div class="spec-meta"><span class="token-name">title</span><span class="token-val">Literata 700 · 2.25rem / 1.2</span></div><div style="font-family:var(--font-serif);font-size:var(--type-title-size);font-weight:700;line-height:var(--type-title-lh);">Great Wall of China</div></div>
+  <div class="spec-row"><div class="spec-meta"><span class="token-name">heading</span><span class="token-val">Mulish 700 · 1.375rem / 1.25</span></div><div style="font-family:var(--font-sans);font-size:var(--type-heading-size);font-weight:700;line-height:var(--type-heading-lh);">My Flashcards</div></div>
+  <div class="spec-row"><div class="spec-meta"><span class="token-name">body-reading</span><span class="token-val">Literata 400 · 1.25rem / 1.7 · 65ch max</span></div><div class="reading-sample">The Great Wall of China is a series of fortifications built across the historical northern borders of ancient Chinese states.</div></div>
+  <div class="spec-row"><div class="spec-meta"><span class="token-name">body</span><span class="token-val">Literata 400 · 1rem / 1.6</span></div><div style="font-family:var(--font-serif);font-size:var(--type-body-size);line-height:var(--type-body-lh);max-width:560px;">Card summaries and secondary reading text use the same serif one step smaller.</div></div>
+  <div class="spec-row"><div class="spec-meta"><span class="token-name">ui</span><span class="token-val">Mulish 600 · 0.9375rem / 1.4</span></div><div style="font-family:var(--font-sans);font-size:var(--type-ui-size);font-weight:600;">Buttons, nav labels, search input</div></div>
+  <div class="spec-row"><div class="spec-meta"><span class="token-name">label</span><span class="token-val">Mulish 600 · 0.8125rem / 1.35</span></div><div style="font-family:var(--font-sans);font-size:var(--type-label-size);font-weight:600;">Tags, chips, dialog actions</div></div>
+  <div class="spec-row"><div class="spec-meta"><span class="token-name">caption</span><span class="token-val">Mulish 700 · 0.6875rem / 1.3 · +0.08em · the device's voice</span></div><div style="font-family:var(--font-sans);font-size:var(--type-caption-size);font-weight:700;letter-spacing:var(--type-caption-ls);text-transform:uppercase;color:var(--color-text-muted);">CARD 3 OF 12 · 2 SAVED THIS WEEK</div></div>
+
+  <!-- ================= SPACING ================= -->
+  <h2>Spacing</h2>
+  <p class="note">0.25rem-base scale; rem units mean rhythm scales with the reader's font-size preference. Touch targets never dip below 44px.</p>
+  <div id="space-rows"></div>
+
+  <!-- ================= RADIUS ================= -->
+  <h2>Radius</h2>
+  <p class="note">Pill = type-and-tap immediacy (search, chips, thumbs). sm = buttons, toolbar, dialogs — the near-square device feel. md = resting containers. Nothing in between.</p>
+  <div class="radius-row">
+    <div class="radius-box" style="border-radius:var(--rounded-none);"><span class="token-name">none</span><span class="token-val">0px · note marker</span></div>
+    <div class="radius-box" style="border-radius:var(--rounded-sm);"><span class="token-name">sm</span><span class="token-val">4px</span></div>
+    <div class="radius-box" style="border-radius:var(--rounded-md);"><span class="token-name">md</span><span class="token-val">8px</span></div>
+    <div class="radius-box" style="border-radius:var(--rounded-full);"><span class="token-name">full</span><span class="token-val">9999px</span></div>
+  </div>
+
+  <!-- ================= ELEVATION ================= -->
+  <h2>Elevation &amp; Depth</h2>
+  <p class="note">Borders and contrast first, like the panel the design imitates. Two shadow levels, always paired with a hairline border. Motion: ≤150ms fades, none under reduced-motion.</p>
+  <div class="elev-row">
+    <div class="elev-card"><b>Level 0 — border only</b><p class="note" style="margin:8px 0 0;">Cards at rest, inputs, badges. <span class="token-val">1px border</span></p></div>
+    <div class="elev-card" style="box-shadow:var(--shadow-sm);"><b>shadow-sm</b><p class="note" style="margin:8px 0 0;">Dropdown, selection toolbar, hovered cards. <span class="token-val">0 1px 2px 10%</span></p></div>
+    <div class="elev-card" style="box-shadow:var(--shadow-md);"><b>shadow-md</b><p class="note" style="margin:8px 0 0;">Note dialog, export sheet — over a 35% scrim. <span class="token-val">0 6px 20px 15%</span></p></div>
+  </div>
+
+  <!-- ================= COMPONENTS ================= -->
+  <h2>Components</h2>
+
+  <h3>Search</h3>
+  <div class="demo-block">
+    <div class="demo-label">input-search · pill, leading icon, trailing ✕ (exits to home)</div>
+    <div class="search-wrap"><svg class="icon lead" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg><input class="input-search" placeholder="Search Wikipedia" aria-label="Search Wikipedia"><button class="icon trail" aria-label="Clear search">✕</button></div>
+    <div class="demo-label">input-search-focus · 2px ink outline</div>
+    <div class="search-wrap"><svg class="icon lead" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg><input class="input-search is-focus" value="great wall" aria-label="Search Wikipedia"><button class="icon trail" aria-label="Clear search">✕</button></div>
+    <div class="demo-label">dropdown-suggestions · top 5 while typing; plain-language empty state</div>
+    <div class="dropdown">
+      <div class="head"><span>Recent searches</span><button class="btn-text" style="min-height:auto;padding:0.25rem 0.5rem;">CLEAR HISTORY</button></div>
+      <div class="row is-active">Great Wall of China <small>Series of fortifications in northern China</small></div>
+      <div class="row">Great Barrier Reef <small>Coral reef system off Queensland, Australia</small></div>
+      <div class="row">Great Depression <small>Worldwide economic downturn, 1929–1939</small></div>
+      <div class="row empty">No article matches "graet wall" — check the spelling or try a broader term.</div>
+    </div>
+  </div>
+
+  <h3>Buttons</h3>
+  <div class="demo-block">
+    <div class="demo-label">button-primary / -hover · button-outline / -hover</div>
+    <div class="demo-row">
+      <button class="btn-primary">Search</button>
+      <button class="btn-primary is-hover">Search (hover)</button>
+      <button class="btn-outline">My Flashcards</button>
+      <button class="btn-outline is-hover">My Flashcards (hover)</button>
+    </div>
+    <div class="demo-label">button-text · dialog actions — destructive gets wording + confirm, never red</div>
+    <div class="demo-row">
+      <button class="btn-text">DELETE</button>
+      <button class="btn-text">CANCEL</button>
+      <button class="btn-text" style="color:var(--color-text-primary);">SAVE</button>
+    </div>
+  </div>
+
+  <h3>Chips</h3>
+  <div class="demo-block">
+    <div class="demo-label">chip-filter / chip-filter-active · tag bubble filters</div>
+    <div class="demo-row">
+      <span class="chip-filter is-active">All</span>
+      <span class="chip-filter">#history</span>
+      <span class="chip-filter">#physics</span>
+      <span class="chip-filter">#sapiens</span>
+    </div>
+    <div class="demo-label">chip-tag · on cards</div>
+    <div class="demo-row"><span class="chip-tag">#history</span><span class="chip-tag">#architecture</span></div>
+  </div>
+
+  <h3>Flashcards</h3>
+  <div class="demo-block">
+    <div class="demo-row" style="align-items:stretch;">
+      <div class="flashcard">
+        <div class="term">Great Wall of China</div>
+        <div class="date">Saved Jul 1 · Reviewed 2 days ago</div>
+        <div class="summary">A series of fortifications built across the historical northern borders of ancient Chinese states…</div>
+        <div class="tags"><span class="chip-tag">#history</span><span class="chip-tag">#architecture</span></div>
+      </div>
+      <div class="flashcard is-hover">
+        <div class="term">Hover state</div>
+        <div class="date">Border-strong + shadow-sm</div>
+        <div class="summary">Edit and delete controls reveal on hover (desktop); always visible on touch.</div>
+        <div class="tags"><span class="chip-tag">#example</span></div>
+      </div>
+      <div class="review-card" tabindex="0">
+        <div class="term-big">Ansible</div>
+        <div class="book-footer" style="padding:0;">Card 3 of 12 · Tap to flip</div>
+      </div>
+    </div>
+  </div>
+
+  <h3>Reading &amp; annotation</h3>
+  <div class="demo-block">
+    <div class="demo-label">highlight-mark + note-marker · yellow is the page's only hue · the whole highlight is clickable and opens the note (hover shows an ink underline)</div>
+    <p class="reading-sample" style="margin:0 0 var(--space-lg);">The wall was built <mark class="hl" role="button" tabindex="0" aria-label="Open note 1">to protect against nomadic incursions from the Eurasian Steppe</mark><span class="note-marker" role="button" tabindex="0" aria-label="Open note 1">1</span>, with watchtowers placed at regular intervals along its length.</p>
+    <div class="demo-label">toolbar-selection · light bordered strip over selected text, as in the reference</div>
+    <div class="sel-toolbar"><button>Highlight</button><button>Note</button></div>
+    <div class="demo-label">dialog-note · near-square, over 35% scrim, shadow-md · space commits a tag chip, ✕ removes it</div>
+    <div class="note-dialog">
+      <div class="head"><b>Note</b><button class="btn-text" style="min-height:auto;padding:0.25rem 0.5rem;" aria-label="Close">✕</button></div>
+      <textarea aria-label="Note text">Mentioned in Chapter 3 of "Sapiens" —</textarea>
+      <label class="field-label" for="tags-demo">Tags</label>
+      <div class="input-tags">
+        <span class="chip-tag removable">#courage <button class="x" aria-label="Remove tag courage">✕</button></span>
+        <span class="chip-tag removable">#fiction <button class="x" aria-label="Remove tag fiction">✕</button></span>
+        <input id="tags-demo" placeholder="Add a tag, space to confirm" aria-label="Add a tag">
+      </div>
+      <div class="actions" style="margin-top:var(--space-md);"><button class="btn-text">DELETE</button><button class="btn-text">CANCEL</button><button class="btn-text" style="color:var(--color-text-primary);">SAVE</button></div>
+    </div>
+  </div>
+
+  <h3>Device chrome</h3>
+  <div class="demo-block">
+    <div class="demo-label">nav-top · one bar, three contexts — the search field changes scope, never shape</div>
+    <div class="nav-top-demo"><div class="search-wrap" style="flex:1;"><svg class="icon lead" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg><input class="input-search" style="height:2.25rem;min-height:2.25rem;" placeholder="Search Wikipedia" aria-label="Search Wikipedia"></div><button class="icon-btn" aria-label="Settings">⚙</button></div>
+    <p class="note" style="margin:0.375rem 0;">Home — Wikipedia search + Settings</p>
+    <div class="nav-top-demo"><span>←</span><div class="search-wrap" style="flex:1;"><svg class="icon lead" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg><input class="input-search" style="height:2.25rem;min-height:2.25rem;" value="great wall" aria-label="Search Wikipedia"><button class="icon trail" aria-label="Clear search">✕</button></div><button class="icon-btn" aria-label="Settings">⚙</button></div>
+    <p class="note" style="margin:0.375rem 0;">Search results — back + Wikipedia search + Settings</p>
+    <div class="nav-top-demo"><div class="search-wrap" style="flex:1;"><svg class="icon lead" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg><input class="input-search is-focus" style="height:2.25rem;min-height:2.25rem;" value="ansible" aria-label="Search your flashcards"><button class="icon trail" aria-label="Clear search">✕</button></div><button class="icon-btn" aria-label="Settings">⚙</button></div>
+    <p class="note" style="margin:0.375rem 0 0;">Flashcards — saved-card search (same anatomy: focus ring + ✕ clear) + Settings</p>
+    <div class="demo-label">nav-bottom · narrow/touch viewports, underlined active item</div>
+    <div class="nav-bottom"><a class="is-active" href="#">Home</a><a href="#">Flashcards</a></div>
+    <div class="demo-label">book-footer · the signature: progress in the device's voice</div>
+    <div style="border:1px dashed var(--color-border-strong);border-radius:var(--rounded-sm);max-width:420px;"><div class="book-footer">Card 3 of 12 · 2 saved this week</div></div>
+    <div class="demo-label">slider-track / slider-thumb · brightness &amp; warmth, light mode only · brightness scale 1–20</div>
+    <div class="slider-demo">
+      <div class="slider-label">Brightness</div>
+      <div class="slider-row">
+        <span class="end">−</span>
+        <div class="slider-track"><div class="slider-fill" style="width:70%;"></div><div class="slider-thumb" style="left:70%;"></div><span class="slider-value" style="left:70%;">18</span></div>
+        <span class="end">+</span>
+      </div>
+    </div>
+    <div class="demo-label">badge-drift · passive "updated on Wikipedia" indicator</div>
+    <div class="demo-row"><span class="badge-drift">◌ Updated on Wikipedia</span></div>
+    <div class="demo-label">toast · save confirmation, bottom-center, auto-dismisses</div>
+    <div class="demo-row"><span class="toast">✓ Saved to flashcards</span></div>
+  </div>
+
+  <!-- ================= DO / DON'T ================= -->
+  <h2>Do's and Don'ts</h2>
+  <div class="dd-grid">
+    <div class="dd-col">
+      <h4>✓ Do</h4>
+      <ul>
+        <li>Reference every color, size, and radius through its token — no raw hex/px in component CSS outside <code>:root</code>.</li>
+        <li>Keep the serif/sans split absolute: Literata is read, Mulish is operated.</li>
+        <li>Size and space in rem so the font-size setting scales the whole interface coherently.</li>
+        <li>Give every interactive element a visible 2px ink focus outline — keyboard is a first-class path.</li>
+        <li>Define light and dark values together whenever a color token is added.</li>
+        <li>Express hierarchy with contrast, borders, and weight first; shadows only at the two defined levels.</li>
+      </ul>
+    </div>
+    <div class="dd-col">
+      <h4>✗ Don't</h4>
+      <ul>
+        <li>Don't introduce any accent hue — yellow means "saved by the reader" and nothing else carries color.</li>
+        <li>Don't add a third font family, a third surface level, or a radius between md and full.</li>
+        <li>Don't style destructive actions red — quiet text button plus confirmation, like the device.</li>
+        <li>Don't animate for attention: ≤150ms fades only, none under reduced motion.</li>
+        <li>Don't render anything that looks like an outbound link — nothing here navigates away.</li>
+        <li>Don't let chrome grow: if a screen needs explanatory text, reconsider the screen.</li>
+      </ul>
+    </div>
+  </div>
+
+  <p class="note" style="margin-top:var(--space-2xl);">Glossary design system · mirror of docs/design.md · derived from PRD_WikiSearch_MVP.md + raw-design-system.fig only · 2026-07-03</p>
+</main>
+
+<script>
+function toggleTheme() {
+  var h = document.documentElement;
+  h.setAttribute('data-theme', h.getAttribute('data-theme') === 'light' ? 'dark' : 'light');
+}
+
+// Swatches read live CSS custom properties so they can never drift from the tokens.
+var tokens = ['background','surface','text-primary','text-secondary','text-muted','border','border-strong','highlight'];
+var lightChip = { 'text-primary':1, 'text-secondary':1, 'text-muted':1 }; // dark chips need light sample text
+
+function renderSwatches() {
+  var cs = getComputedStyle(document.documentElement);
+  var mount = document.getElementById('swatches');
+  mount.innerHTML = '';
+  tokens.forEach(function(name) {
+    var val = cs.getPropertyValue('--color-' + name).trim();
+    var fg = lightChip[name] ? cs.getPropertyValue('--color-background').trim() : cs.getPropertyValue('--color-text-primary').trim();
+    var d = document.createElement('div');
+    d.className = 'swatch';
+    d.innerHTML = '<div class="chip" style="background:' + val + ';color:' + fg + ';">Aa sample text</div>' +
+                  '<div class="meta"><span class="token-name">' + name + '</span><span class="token-val">' + val + '</span></div>';
+    mount.appendChild(d);
+  });
+}
+renderSwatches();
+new MutationObserver(renderSwatches).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+// Spacing rows
+var spaces = [['xs','0.25rem'],['sm','0.5rem'],['md','0.75rem'],['base','1rem'],['lg','1.5rem'],['xl','2rem'],['2xl','3rem'],['3xl','4rem']];
+var mount = document.getElementById('space-rows');
+spaces.forEach(function(s) {
+  var r = document.createElement('div');
+  r.className = 'space-row';
+  r.innerHTML = '<span class="token-name" style="width:56px;">' + s[0] + '</span><div class="space-bar" style="width:' + s[1] + ';"></div><span class="token-val">' + s[1] + '</span>';
+  mount.appendChild(r);
+});
+</script>
+</body>
+</html>

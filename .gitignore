@@ -1,0 +1,7 @@
+# Windows noise
+desktop.ini
+Thumbs.db
+
+# Editor/OS scratch
+*.tmp
+~$*

@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light dark">
+<title>Glossary</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Mulish:wght@400;600;700&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,700;1,7..72,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
+<script src="app.js"></script>
+</head>
+<body x-data="glossaryApp()" x-init="init()" @keydown.window="onKeydown($event)" @click="closeTransient($event)">
+<div id="warmth-overlay"></div>
+
+<!-- ============ TOP BAR (contextual) ============ -->
+<header class="top-bar">
+  <button class="icon-btn" x-show="page==='results' || page==='detail' || page==='settings' || page==='pairing'"
+          @click="goBack()" aria-label="Back" x-cloak>←</button>
+
+  <button class="brand" x-show="page!=='home'" @click="nav('home')" x-cloak>Glossary</button>
+
+  <!-- Wikipedia search (home + results) -->
+  <div class="search-wrap" x-show="page==='home' || page==='results'" @click.stop>
+    <svg class="icon-lead" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+    <input id="search-input" class="input-search" type="text" autocomplete="off"
+           placeholder="Search Wikipedia" aria-label="Search Wikipedia"
+           x-model="query" @input="onQueryInput()" @focus="onSearchFocus()"
+           @keydown.enter.prevent="submitFromInput()"
+           @keydown.down.prevent="moveSug(1)" @keydown.up.prevent="moveSug(-1)"
+           @keydown.escape="closeSearch()">
+    <button class="icon-clear" x-show="query.length > 0" @click="clearSearch()" aria-label="Clear search" x-cloak>✕</button>
+
+    <!-- Suggestions / recent searches dropdown -->
+    <div class="dropdown" x-show="showDropdown" x-cloak>
+      <template x-if="query.trim().length === 0">
+        <div>
+          <div class="head"><span>Recent searches</span>
+            <button class="btn-text" style="min-height:auto;" x-show="recent.length" @click="clearRecent()">CLEAR HISTORY</button>
+          </div>
+          <template x-for="r in recent" :key="r">
+            <button class="row" @click="submitSearch(r)" x-text="r"></button>
+          </template>
+          <div class="empty" x-show="recent.length === 0">There are no recent searches.</div>
+        </div>
+      </template>
+      <template x-if="query.trim().length > 0">
+        <div>
+          <template x-for="(s, i) in suggestions" :key="s.title">
+            <button class="row" :class="{ active: i === activeSug }" @click="submitSearch(s.title)">
+              <span x-text="s.title"></span>
+              <small x-show="s.description" x-text="s.description"></small>
+            </button>
+          </template>
+          <div class="empty" x-show="suggestions.length === 0 && !sugLoading">
+            No article matches "<span x-text="query"></span>" — check the spelling or try a broader term.
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <!-- Flashcards search (cards page) -->
+  <div class="search-wrap" x-show="page==='cards'" x-cloak @click.stop>
+    <svg class="icon-lead" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+    <input class="input-search" type="text" autocomplete="off"
+           placeholder="Search your flashcards" aria-label="Search your flashcards"
+           x-model="cardSearch" @keydown.escape="cardSearch=''">
+    <button class="icon-clear" x-show="cardSearch.length > 0" @click="cardSearch=''" aria-label="Clear search" x-cloak>✕</button>
+  </div>
+
+  <span style="flex:1;" x-show="page==='detail' || page==='settings' || page==='pairing'" x-cloak></span>
+
+  <nav class="top-links" aria-label="Primary">
+    <a href="#/home" :class="{ active: page==='home' || page==='results' }">Home</a>
+    <a href="#/cards" :class="{ active: page==='cards' || page==='detail' }">Flashcards</a>
+  </nav>
+
+  <button class="icon-btn" @click="nav('settings')" aria-label="Settings">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.6 1.6 0 0 0 .32 1.76l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.6 1.6 0 0 0-1.76-.32 1.6 1.6 0 0 0-.97 1.47V21a2 2 0 1 1-4 0v-.09a1.6 1.6 0 0 0-1.05-1.47 1.6 1.6 0 0 0-1.76.32l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.6 1.6 0 0 0 .32-1.76 1.6 1.6 0 0 0-1.47-.97H3a2 2 0 1 1 0-4h.09a1.6 1.6 0 0 0 1.47-1.05 1.6 1.6 0 0 0-.32-1.76l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.6 1.6 0 0 0 1.76.32h.09a1.6 1.6 0 0 0 .97-1.47V3a2 2 0 1 1 4 0v.09a1.6 1.6 0 0 0 .97 1.47 1.6 1.6 0 0 0 1.76-.32l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.6 1.6 0 0 0-.32 1.76v.09a1.6 1.6 0 0 0 1.47.97H21a2 2 0 1 1 0 4h-.09a1.6 1.6 0 0 0-1.47.97z"/></svg>
+  </button>
+</header>
+
+<main>
+  <!-- ============ HOME ============ -->
+  <section x-show="page==='home'">
+    <div class="home-hero">
+      <h1 class="wordmark">Glossary</h1>
+      <p class="tagline">Look it up. Save it. Back to your book.</p>
+    </div>
+    <div class="recent-list">
+      <div class="head">
+        <span class="caption">Recent searches</span>
+        <button class="btn-text" x-show="recent.length" @click="clearRecent()">CLEAR HISTORY</button>
+      </div>
+      <template x-for="r in recent" :key="r">
+        <button class="row" @click="submitSearch(r)"><span aria-hidden="true">↻</span><span x-text="r"></span></button>
+      </template>
+      <p class="empty-note" x-show="recent.length === 0">There are no recent searches. Type a term above to look it up.</p>
+    </div>
+  </section>
+
+  <!-- ============ RESULTS ============ -->
+  <section x-show="page==='results'" x-cloak>
+    <div class="reading-col">
+      <div class="state-box" x-show="resultState==='loading'"><p>Looking up…</p></div>
+
+      <div class="state-box" x-show="resultState==='error'">
+        <p><b x-text="'No article found for “' + lastQuery + '”.'"></b></p>
+        <p>Check the spelling, or try a broader or more formal term.</p>
+        <button class="btn-outline" @click="nav('home')">Back to search</button>
+      </div>
+
+      <div class="state-box" x-show="resultState==='offline'">
+        <p><b>You're offline and this term isn't cached yet.</b></p>
+        <p>Terms you've looked up before stay available offline; a brand-new term needs a connection once.</p>
+        <button class="btn-outline" @click="nav('home')">Back to search</button>
+      </div>
+
+      <div x-show="resultState==='disambig'">
+        <h1 class="page-title" x-text="'“' + lastQuery + '” could mean:'"></h1>
+        <div class="candidates">
+          <template x-for="c in candidates" :key="c.title">
+            <button class="row" @click="submitSearch(c.title)">
+              <span x-text="c.title"></span>
+              <small x-show="c.description" x-text="c.description"></small>
+            </button>
+          </template>
+        </div>
+      </div>
+
+      <article x-show="resultState==='ok'" x-cloak>
+        <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+          <h1 class="page-title" style="margin-bottom:0.5rem;" x-text="result?.title"></h1>
+          <span class="badge-drift" x-show="alreadySaved()" x-cloak>Saved</span>
+        </div>
+        <img class="result-img" x-show="result?.image" :src="result?.image" :alt="result?.title" x-cloak>
+        <div class="extract" :class="{ collapsed: !expanded && isLong() }"
+             @mouseup="onTextMouseUp($event, 'results')"
+             x-html="resultExtractHtml()"></div>
+        <button class="btn-text" x-show="isLong()" @click="expanded = !expanded" x-text="expanded ? 'SHOW LESS' : 'SHOW MORE'" x-cloak></button>
+        <p class="credit">via Wikipedia · text available under CC BY-SA</p>
+        <div class="result-actions">
+          <button class="btn-primary" @click="saveCard()" x-text="alreadySaved() ? 'Open flashcard' : 'Save as flashcard'"></button>
+          <span class="muted" style="font-size:var(--type-label-size);">or select text to highlight &amp; save</span>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ============ FLASHCARDS ============ -->
+  <section x-show="page==='cards'" x-cloak>
+    <h1 class="page-title">My Flashcards</h1>
+
+    <div class="cards-toolbar">
+      <div class="mode-toggle" role="tablist" aria-label="Display mode">
+        <button :class="{ active: mode==='overview' }" @click="setMode('overview')">Overview</button>
+        <button :class="{ active: mode==='review' }" @click="setMode('review')">Review</button>
+      </div>
+      <button class="btn-outline" x-show="mode==='overview' && cards.length" @click="toggleSelectMode()"
+              x-text="selectMode ? 'Cancel selection' : 'Select for export'"></button>
+      <button class="btn-primary" x-show="selectMode && selected.length" @click="exportSheet = true"
+              x-text="'Export (' + selected.length + ')'" x-cloak></button>
+    </div>
+
+    <div class="chip-row" style="margin-bottom:var(--space-lg);" x-show="allTags().length">
+      <button class="chip-filter" :class="{ active: tagFilter===null }" @click="tagFilter = null">All</button>
+      <template x-for="t in allTags()" :key="t">
+        <button class="chip-filter" :class="{ active: tagFilter===t }" @click="tagFilter = (tagFilter===t ? null : t)" x-text="'#' + t"></button>
+      </template>
+    </div>
+
+    <div class="state-box" x-show="cards.length === 0">
+      <p><b>No flashcards yet.</b></p>
+      <p>Look up a term and tap "Save as flashcard" — it will appear here.</p>
+      <button class="btn-outline" @click="nav('home')">Search Wikipedia</button>
+    </div>
+
+    <!-- Overview mode -->
+    <div class="cards-grid" x-show="mode==='overview'">
+      <template x-for="c in visibleCards()" :key="c.id">
+        <button class="flashcard" :class="{ selected: selected.includes(c.id) }" @click="cardClick(c)">
+          <span class="select-check" x-show="selectMode" x-text="selected.includes(c.id) ? '✓' : ''" x-cloak></span>
+          <div class="badges"><span class="badge-drift" x-show="c.drifted" x-cloak>Updated on Wikipedia</span></div>
+          <div class="term" x-text="c.title"></div>
+          <div class="date caption" x-text="cardMeta(c)"></div>
+          <div class="summary" x-text="c.extract"></div>
+          <div class="chip-row">
+            <template x-for="t in cardTags(c)" :key="t"><span class="chip-tag" x-text="'#' + t"></span></template>
+          </div>
+        </button>
+      </template>
+    </div>
+
+    <!-- Review mode -->
+    <div class="cards-grid" x-show="mode==='review'" x-cloak>
+      <template x-for="c in visibleCards()" :key="c.id">
+        <button class="review-card" @click="reviewClick(c)">
+          <template x-if="!flipped[c.id]">
+            <span class="term-big" x-text="c.title"></span>
+          </template>
+          <template x-if="flipped[c.id]">
+            <span class="summary" x-text="c.extract.slice(0, 220) + (c.extract.length > 220 ? '…' : '')"></span>
+          </template>
+          <span class="caption" x-text="flipped[c.id] ? 'Tap again for details' : 'Tap to flip'"></span>
+        </button>
+      </template>
+    </div>
+
+    <div class="book-footer caption" x-show="cards.length"
+         x-text="'Card ' + Math.min(1, visibleCards().length) + '–' + visibleCards().length + ' of ' + cards.length + ' · ' + savedThisWeek() + ' saved this week'"></div>
+  </section>
+
+  <!-- ============ DETAIL ============ -->
+  <section x-show="page==='detail'" x-cloak>
+    <template x-if="currentCard()">
+      <div class="reading-col">
+        <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+          <h1 class="page-title" style="margin-bottom:0.5rem;" x-text="currentCard().title"></h1>
+          <span class="badge-drift" x-show="currentCard().drifted" x-cloak>Updated on Wikipedia</span>
+        </div>
+        <div class="detail-meta">
+          <span class="caption" x-text="cardMeta(currentCard())"></span>
+          <button class="btn-text" @click="deleteCard(currentCard().id)">DELETE CARD</button>
+        </div>
+
+        <img class="result-img" x-show="currentCard().image" :src="currentCard().image" :alt="currentCard().title" x-cloak>
+        <div class="extract" @mouseup="onTextMouseUp($event, 'detail')" x-html="detailExtractHtml()"></div>
+        <p class="credit">via Wikipedia · text available under CC BY-SA · saved copy — never updates on its own</p>
+
+        <h2 class="heading">Card tags</h2>
+        <div class="input-tags" style="max-width:420px;">
+          <template x-for="t in currentCard().tags" :key="t">
+            <span class="chip-tag">#<span x-text="t"></span><button class="x" @click="removeCardTag(t)" :aria-label="'Remove tag ' + t">✕</button></span>
+          </template>
+          <input x-model="cardTagInput" list="all-tags"
+                 placeholder="Add a tag, space to confirm" aria-label="Add card tag"
+                 @keydown="onTagKeydown($event, 'card')">
+        </div>
+
+        <h2 class="heading">Highlights &amp; notes</h2>
+        <p class="muted" x-show="!currentCard().highlights.length" style="font-family:var(--font-sans);">
+          Select any text in the summary above to highlight it — add a note and tags in the popup.
+        </p>
+        <template x-for="(h, i) in currentCard().highlights" :key="h.id">
+          <div class="hl-item">
+            <blockquote x-text="'“' + h.text + '”'"></blockquote>
+            <p class="note-text" x-show="h.note" x-text="h.note"></p>
+            <div class="chip-row">
+              <template x-for="t in h.tags" :key="t"><span class="chip-tag" x-text="'#' + t"></span></template>
+              <button class="btn-text" @click="openNoteDialog(h.id)">EDIT</button>
+              <button class="btn-text" @click="removeHighlight(h.id)">REMOVE</button>
+            </div>
+          </div>
+        </template>
+      </div>
+    </template>
+    <div class="state-box" x-show="!currentCard()"><p>Card not found.</p><button class="btn-outline" @click="nav('cards')">Back to flashcards</button></div>
+  </section>
+
+  <!-- ============ SETTINGS ============ -->
+  <section x-show="page==='settings'" x-cloak>
+    <h1 class="page-title">Settings</h1>
+
+    <div class="settings-group">
+      <h2 class="heading" style="margin-top:0;">Display <span class="caption" style="margin-left:0.5rem;">per device — never synced</span></h2>
+      <div class="settings-row">
+        <label for="set-theme">Theme</label>
+        <div class="mode-toggle" id="set-theme">
+          <button :class="{ active: prefs.theme==='light' }" @click="setPref('theme','light')">Light</button>
+          <button :class="{ active: prefs.theme==='dark' }" @click="setPref('theme','dark')">Dark</button>
+        </div>
+      </div>
+      <div class="settings-row" x-show="prefs.theme==='light'">
+        <label for="set-brightness">Brightness <span class="muted" x-text="'(' + prefs.brightness + '/20)'"></span></label>
+        <input id="set-brightness" type="range" min="1" max="20" step="1" x-model.number="prefs.brightness" @input="applyPrefs(); persistPrefs()">
+      </div>
+      <div class="settings-row" x-show="prefs.theme==='light'">
+        <label for="set-warmth">Warmth <span class="muted" x-text="'(' + prefs.warmth + '/20)'"></span></label>
+        <input id="set-warmth" type="range" min="0" max="20" step="1" x-model.number="prefs.warmth" @input="applyPrefs(); persistPrefs()">
+      </div>
+      <div class="settings-row">
+        <label for="set-font">Font size <span class="muted" x-text="Math.round(prefs.fontScale * 100) + '%'"></span></label>
+        <input id="set-font" type="range" min="0.85" max="1.3" step="0.05" x-model.number="prefs.fontScale" @input="applyPrefs(); persistPrefs()">
+      </div>
+    </div>
+
+    <div class="settings-group">
+      <h2 class="heading" style="margin-top:0;">Backup</h2>
+      <div class="settings-row">
+        <label>Manual JSON backup</label>
+        <div style="display:flex;gap:0.5rem;">
+          <button class="btn-outline" @click="exportJson()">Export JSON</button>
+          <button class="btn-outline" @click="$refs.importFile.click()">Import JSON</button>
+          <input type="file" x-ref="importFile" accept="application/json" style="display:none" @change="importJson($event)">
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-group">
+      <h2 class="heading" style="margin-top:0;">Sync &amp; devices</h2>
+      <p class="muted" style="font-family:var(--font-sans);font-size:var(--type-label-size);">
+        Sync status: local only — Firebase pairing is simulated in this version. Flashcards live in this browser's storage.
+      </p>
+      <template x-for="d in devices" :key="d.id">
+        <div class="device-row">
+          <span style="font-weight:600;" x-text="d.name + (d.current ? ' (this device)' : '')"></span>
+          <button class="btn-text" x-show="!d.current" @click="revokeDevice(d.id)">REVOKE</button>
+        </div>
+      </template>
+      <div style="margin-top:var(--space-base);">
+        <button class="btn-outline" @click="nav('pairing')">Pair a new device</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PAIRING ============ -->
+  <section x-show="page==='pairing'" x-cloak>
+    <h1 class="page-title">Device pairing</h1>
+    <div class="settings-group" style="max-width:460px;">
+      <h2 class="heading" style="margin-top:0;">This device's code</h2>
+      <p class="muted" style="font-family:var(--font-sans);font-size:var(--type-label-size);">Enter this code on an already-paired device to link this one. Codes expire after one use. (Simulated in this version.)</p>
+      <div class="pair-code" x-text="pairCode"></div>
+      <button class="btn-text" @click="regenCode()">GENERATE NEW CODE</button>
+    </div>
+    <div class="settings-group" style="max-width:460px;">
+      <h2 class="heading" style="margin-top:0;">Link another device</h2>
+      <p class="muted" style="font-family:var(--font-sans);font-size:var(--type-label-size);">Type the 6-digit code shown on your other device.</p>
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+        <input class="text-input" x-model="enterCode" maxlength="6" inputmode="numeric" placeholder="000000" aria-label="Pairing code">
+        <button class="btn-primary" @click="pairDevice()">Link device</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ============ BOTTOM NAV (mobile) ============ -->
+<nav class="nav-bottom" aria-label="Primary">
+  <a href="#/home" :class="{ active: page==='home' || page==='results' }">Home</a>
+  <a href="#/cards" :class="{ active: page==='cards' || page==='detail' }">Flashcards</a>
+</nav>
+
+<!-- ============ SELECTION TOOLBAR ============ -->
+<div class="sel-toolbar" x-show="toolbar.show" :style="'left:' + toolbar.x + 'px; top:' + toolbar.y + 'px;'" x-cloak @click.stop>
+  <button @click="confirmHighlight(false)" x-text="toolbar.context === 'results' ? 'Highlight & save' : 'Highlight'"></button>
+  <button @click="confirmHighlight(true)">Note</button>
+</div>
+
+<!-- ============ NOTE DIALOG ============ -->
+<div class="scrim" x-show="noteDialog.show" x-cloak @click.self="closeNoteDialog(false)" @keydown.escape.window="noteDialog.show && closeNoteDialog(false)">
+  <div class="dialog" role="dialog" aria-modal="true" aria-label="Note">
+    <div class="head"><b>Note</b><button class="btn-text" @click="closeNoteDialog(false)" aria-label="Close">✕</button></div>
+    <blockquote class="muted" style="font-family:var(--font-serif);margin:0 0 var(--space-md);font-size:var(--type-label-size);"
+                x-text="'“' + noteDialog.quote + '”'"></blockquote>
+    <textarea x-model="noteDialog.text" placeholder="Write a note…" aria-label="Note text" x-ref="noteText"></textarea>
+    <label class="field-label caption" for="note-tags">Tags</label>
+    <div class="input-tags">
+      <template x-for="t in noteDialog.tags" :key="t">
+        <span class="chip-tag">#<span x-text="t"></span><button class="x" @click="noteDialog.tags = noteDialog.tags.filter(x => x !== t)" :aria-label="'Remove tag ' + t">✕</button></span>
+      </template>
+      <input id="note-tags" x-model="noteDialog.tagInput" list="all-tags"
+             placeholder="Add a tag, space to confirm" aria-label="Add a tag"
+             @keydown="onTagKeydown($event, 'note')">
+    </div>
+    <div class="actions">
+      <button class="btn-text" @click="deleteFromDialog()">DELETE</button>
+      <button class="btn-text" @click="closeNoteDialog(false)">CANCEL</button>
+      <button class="btn-text strong" @click="closeNoteDialog(true)">SAVE</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ EXPORT SHEET ============ -->
+<div class="scrim" x-show="exportSheet" x-cloak @click.self="exportSheet = false" @keydown.escape.window="exportSheet = false">
+  <div class="dialog" role="dialog" aria-modal="true" aria-label="Export flashcards">
+    <div class="head"><b>Export</b><button class="btn-text" @click="exportSheet = false" aria-label="Close">✕</button></div>
+    <p style="font-family:var(--font-sans);font-size:var(--type-ui-size);">
+      <b x-text="selected.length"></b> flashcard<span x-show="selected.length !== 1">s</span> selected →
+      Markdown with YAML frontmatter<span x-show="selected.length > 1">, bundled as .zip</span>.
+    </p>
+    <ul style="font-family:var(--font-sans);font-size:var(--type-label-size);color:var(--color-text-secondary);padding-left:1.25rem;">
+      <template x-for="id in selected" :key="id"><li x-text="(cards.find(c => c.id === id) || {}).title"></li></template>
+    </ul>
+    <p class="muted" style="font-family:var(--font-sans);font-size:var(--type-caption-size);">
+      This downloads a file you move into Obsidian or Notion yourself. Notion won't parse the frontmatter into page properties; Obsidian will.
+    </p>
+    <div class="actions">
+      <button class="btn-text" @click="exportSheet = false">CANCEL</button>
+      <button class="btn-primary" @click="doExport()">Download</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ TOAST ============ -->
+<div class="toast" x-show="toast" x-cloak x-text="toast"></div>
+
+<datalist id="all-tags">
+  <template x-for="t in allTags()" :key="t"><option :value="t"></option></template>
+</datalist>
+</body>
+</html>
