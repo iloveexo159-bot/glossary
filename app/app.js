@@ -26,6 +26,10 @@ function escapeHtml(s) {
 }
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
+/* Wikimedia API etiquette: browsers block a custom User-Agent on fetch,
+   but Wikimedia explicitly supports Api-User-Agent for CORS clients. */
+const WIKI_HEADERS = { 'Api-User-Agent': 'Glossary/0.1 (personal reading companion; iloveexo159@gmail.com)' };
+
 function glossaryApp() {
   return {
     /* ---------- state ---------- */
@@ -163,7 +167,7 @@ function glossaryApp() {
       const cache = lsGet(LS.cache, {});
       try {
         const url = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(term.replace(/ /g, '_'))}?redirect=true`;
-        const res = await fetch(url);
+        const res = await fetch(url, { headers: WIKI_HEADERS });
         if (res.status === 404) { this.resultState = 'error'; return; }
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const data = await res.json();
@@ -521,7 +525,7 @@ function glossaryApp() {
     },
 
     /* ---------- export ---------- */
-    buildMarkdown(c) {
+    buildMarkdown(c, imagePath) {
       const tags = this.cardTags(c);
       const fm = [
         '---',
@@ -532,7 +536,7 @@ function glossaryApp() {
         '---', '',
       ].join('\n');
       let body = `# ${c.title}\n\n`;
-      if (c.image) body += `![${c.title}](${c.image})\n\n`;
+      if (c.image) body += `![${c.title}](${imagePath || c.image})\n\n`;
       body += c.extract + '\n';
       if (c.highlights.length) {
         body += '\n## Highlights\n';
@@ -545,7 +549,8 @@ function glossaryApp() {
       body += '\n---\n*via Wikipedia · text available under CC BY-SA*\n';
       return fm + body;
     },
-    safeFilename(title) { return title.replace(/[\\/:*?"<>|]/g, '-') + '.md'; },
+    safeBase(title) { return title.replace(/[\\/:*?"<>|]/g, '-'); },
+    safeFilename(title) { return this.safeBase(title) + '.md'; },
     downloadBlob(blob, name) {
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
@@ -555,17 +560,38 @@ function glossaryApp() {
       a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 5000);
     },
+    /* PRD: exports embed images for offline vaults. Cards with an image export
+       as a .zip containing the .md plus an images/ folder, with the markdown
+       referencing the local relative path. If the image fetch fails, the
+       markdown falls back to the remote URL rather than losing the reference. */
+    async fetchImageInto(zip, c) {
+      if (!c.image) return null;
+      try {
+        const res = await fetch(c.image);
+        if (!res.ok) return null;
+        const blob = await res.blob();
+        const ext = (c.image.split('.').pop() || 'jpg').split(/[?#]/)[0].slice(0, 4) || 'jpg';
+        const path = `images/${this.safeBase(c.title)}.${ext}`;
+        zip.file(path, blob);
+        return path;
+      } catch { return null; }
+    },
     async doExport() {
       const chosen = this.cards.filter(c => this.selected.includes(c.id));
       if (!chosen.length) return;
-      if (chosen.length === 1) {
+      const anyImage = chosen.some(c => c.image);
+      if (chosen.length === 1 && (!anyImage || !window.JSZip)) {
         this.downloadBlob(new Blob([this.buildMarkdown(chosen[0])], { type: 'text/markdown' }),
           this.safeFilename(chosen[0].title));
       } else if (window.JSZip) {
         const zip = new JSZip();
-        chosen.forEach(c => zip.file(this.safeFilename(c.title), this.buildMarkdown(c)));
+        for (const c of chosen) {
+          const imgPath = await this.fetchImageInto(zip, c);
+          zip.file(this.safeFilename(c.title), this.buildMarkdown(c, imgPath));
+        }
         const blob = await zip.generateAsync({ type: 'blob' });
-        this.downloadBlob(blob, 'glossary-export.zip');
+        const name = chosen.length === 1 ? this.safeBase(chosen[0].title) + '.zip' : 'glossary-export.zip';
+        this.downloadBlob(blob, name);
       } else {
         // JSZip CDN unavailable — fall back to one combined file
         const combined = chosen.map(c => this.buildMarkdown(c)).join('\n\n---\n\n');
