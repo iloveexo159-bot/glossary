@@ -38,8 +38,10 @@ function glossaryApp() {
     suggestions: [], sugLoading: false, showDropdown: false, activeSug: -1,
     recent: [],
     result: null, resultState: 'idle', candidates: [], expanded: false,
-    cards: [], mode: 'overview', tagFilter: null, cardSearch: '',
-    selectMode: false, selected: [], flipped: {}, reviewOrder: [],
+    cards: [], mode: 'overview', tagFilter: null, statusFilter: null, cardSearch: '',
+    cardPage: 1, cardPageSize: 12,
+    selectMode: false, selected: [], flipped: {}, reviewOrder: [], reviewSelection: [],
+    _histStack: [], _lastHash: '', _backNav: false,
     detailId: null,
     toolbar: { show: false, x: 0, y: 0, text: '', context: 'results' },
     noteDialog: { show: false, quote: '', text: '', tags: [], tagInput: '', highlightId: null, cardId: null },
@@ -60,9 +62,20 @@ function glossaryApp() {
       window.addEventListener('hashchange', () => this.route());
       this.route();
       this.$nextTick(() => this.focusSearch());
+      // any change to the flashcard filters lands you back on page 1 —
+      // a stale page index against a shorter filtered list would look empty
+      this.$watch('cardSearch', () => { this.cardPage = 1; });
+      this.$watch('tagFilter', () => { this.cardPage = 1; });
+      this.$watch('statusFilter', () => { this.cardPage = 1; });
+      this.$watch('mode', () => { this.cardPage = 1; });
     },
     route() {
       const h = location.hash || '#/home';
+      // back-stack bookkeeping: normal navigation records where we came from;
+      // a goBack() navigation consumes the stack instead of growing it
+      if (this._lastHash && this._lastHash !== h && !this._backNav) this._histStack.push(this._lastHash);
+      this._backNav = false;
+      this._lastHash = h;
       const parts = h.slice(2).split('/');
       const p = parts[0] || 'home';
       if (p === 'results' && parts[1]) {
@@ -84,13 +97,22 @@ function glossaryApp() {
       }
       this.toolbar.show = false;
       this.showDropdown = false;
+      // the search box reflects the *current* results context only — leaving
+      // the results page empties it so old terms don't haunt other pages
+      if (this.page !== 'results') { this.query = ''; this.suggestions = []; this.activeSug = -1; }
     },
     nav(page, param) {
       location.hash = param ? `#/${page}/${encodeURIComponent(param)}` : `#/${page}`;
     },
     goBack() {
-      if (this.page === 'detail') this.nav('cards');
-      else this.nav('home');
+      const prev = this._histStack.pop();
+      if (prev) {
+        this._backNav = true;
+        location.hash = prev;
+      } else {
+        // no in-app history (e.g. deep link straight to this page) — sensible default
+        this.nav(this.page === 'detail' ? 'cards' : 'home');
+      }
     },
     closeTransient() {
       this.showDropdown = false;
@@ -231,6 +253,7 @@ function glossaryApp() {
         revision: this.result.revision,
         savedAt: Date.now(),
         lastReviewedAt: null,
+        lastExportedAt: null,
         note: '',
         tags: [],
         highlights: [],
@@ -359,15 +382,38 @@ function glossaryApp() {
     },
     setMode(m) {
       this.mode = m; this.flipped = {};
+      this.reviewSelection = []; // mode switches always return to the full deck
       if (m === 'review') { this.selectMode = false; this.selected = []; this.reviewOrder = this.computeReviewOrder(); }
     },
     toggleSelectMode() { this.selectMode = !this.selectMode; this.selected = []; },
+    /* "Select all" operates on the filtered set (tags + search + status), not the
+       whole collection — filter to a topic, select all, review just that topic. */
+    allVisibleSelected() {
+      const vis = this.visibleCards();
+      return vis.length > 0 && vis.every(c => this.selected.includes(c.id));
+    },
+    toggleSelectAll() {
+      this.selected = this.allVisibleSelected() ? [] : this.visibleCards().map(c => c.id);
+    },
+    startReviewSelected() {
+      const ids = [...this.selected];
+      this.setMode('review'); // clears selection state
+      this.reviewSelection = ids;
+    },
     visibleCards() {
       let list = [...this.cards];
       if (this.tagFilter) {
         list = list.filter(c =>
           (c.tags || []).includes(this.tagFilter) ||
           (c.highlights || []).some(h => (h.tags || []).includes(this.tagFilter)));
+      }
+      if (this.statusFilter === 'reviewed') list = list.filter(c => !!c.lastReviewedAt);
+      if (this.statusFilter === 'unreviewed') list = list.filter(c => !c.lastReviewedAt);
+      if (this.statusFilter === 'exported') list = list.filter(c => !!c.lastExportedAt);
+      if (this.statusFilter === 'unexported') list = list.filter(c => !c.lastExportedAt);
+      // a review session started from a selection sees only those cards
+      if (this.mode === 'review' && this.reviewSelection.length) {
+        list = list.filter(c => this.reviewSelection.includes(c.id));
       }
       const q = this.cardSearch.trim().toLowerCase();
       if (q) list = list.filter(c => (c.title || '').toLowerCase().includes(q) || (c.extract || '').toLowerCase().includes(q));
@@ -391,6 +437,21 @@ function glossaryApp() {
       const set = new Set();
       this.cards.forEach(c => this.cardTags(c).forEach(t => set.add(t)));
       return [...set].sort();
+    },
+    pageCount() {
+      return Math.max(1, Math.ceil(this.visibleCards().length / this.cardPageSize));
+    },
+    pagedCards() {
+      // deleting cards or narrowing a filter can strand cardPage past the end —
+      // clamp here so the grid never renders an empty page
+      const pages = this.pageCount();
+      if (this.cardPage > pages) this.cardPage = pages;
+      const start = (this.cardPage - 1) * this.cardPageSize;
+      return this.visibleCards().slice(start, start + this.cardPageSize);
+    },
+    setCardPage(p) {
+      this.cardPage = Math.min(Math.max(1, p), this.pageCount());
+      window.scrollTo(0, 0);
     },
     cardMeta(c) {
       const d = new Date(c.savedAt);
@@ -674,6 +735,10 @@ function glossaryApp() {
         const combined = chosen.map(c => this.buildMarkdown(c)).join('\n\n---\n\n');
         this.downloadBlob(new Blob([combined], { type: 'text/markdown' }), 'glossary-export.md');
       }
+      // stamp what actually went out — feeds the "Exported / Not exported" filter
+      const now = Date.now();
+      chosen.forEach(c => { c.lastExportedAt = now; });
+      this.persistCards();
       this.exportSheet = false;
       this.selectMode = false;
       this.selected = [];
@@ -724,6 +789,7 @@ function glossaryApp() {
         revision: num(raw.revision),
         savedAt: num(raw.savedAt) || Date.now(),
         lastReviewedAt: num(raw.lastReviewedAt),
+        lastExportedAt: num(raw.lastExportedAt),
         tags: Array.isArray(raw.tags) ? raw.tags.filter(t => typeof t === 'string' && t.trim()).map(t => t.trim()) : [],
         highlights: Array.isArray(raw.highlights) ? raw.highlights.map(h => this.sanitizeHighlight(h)).filter(Boolean) : [],
         drifted: false,

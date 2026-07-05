@@ -52,7 +52,12 @@
   --space-xs: 0.25rem; --space-sm: 0.5rem; --space-md: 0.75rem; --space-base: 1rem;
   --space-lg: 1.5rem; --space-xl: 2rem; --space-2xl: 3rem; --space-3xl: 4rem;
 }
-html { font-size: calc(100% * var(--user-font-scale)); }
+html {
+  font-size: calc(100% * var(--user-font-scale));
+  /* reserve the scrollbar gutter permanently — otherwise the centered column
+     shifts a few px between short pages (no scrollbar) and long ones */
+  scrollbar-gutter: stable;
+}
 
 * { box-sizing: border-box; }
 body {
@@ -84,22 +89,33 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 /* ---------- Top bar ---------- */
 .top-bar {
   position: sticky; top: 0; z-index: 20;
-  display: flex; align-items: center; gap: var(--space-md);
   height: 3.5rem; padding: 0 var(--space-base);
   background: var(--color-background); border-bottom: 1px solid var(--color-border);
+}
+/* Bar contents share the centered content column so the nav lines up with the
+   page body on wide monitors instead of hugging the screen edge */
+.top-bar-inner {
+  display: flex; align-items: center; gap: var(--space-md);
+  max-width: 900px; margin: 0 auto; height: 100%;
 }
 .top-bar .brand {
   font-family: var(--font-serif); font-weight: 700; font-size: 1.25rem; cursor: pointer;
   background: none; border: none; color: var(--color-text-primary); padding: 0.25rem 0.375rem; border-radius: var(--rounded-sm);
 }
-.top-links { display: flex; gap: var(--space-sm); }
+/* margin-left:auto pins nav + settings to the column's right edge on every page */
+.top-links { display: flex; gap: var(--space-sm); margin-left: auto; }
 .top-links a {
   color: var(--color-text-secondary); text-decoration: none; font-weight: 600;
   font-size: var(--type-ui-size); padding: 0.375rem 0.5rem; border-radius: var(--rounded-sm);
 }
 .top-links a.active { color: var(--color-text-primary); font-weight: 700; text-decoration: underline; text-underline-offset: 5px; }
 .top-links a:hover { color: var(--color-text-primary); }
-@media (max-width: 640px) { .top-links { display: none; } }
+@media (max-width: 640px) {
+  .top-links { display: none; }
+  /* narrow screens: bottom nav already links Home — drop the wordmark so the
+     top-bar search keeps a usable width next to back + settings */
+  .top-bar .brand { display: none; }
+}
 
 .icon-btn {
   background: transparent; border: none; cursor: pointer;
@@ -203,6 +219,8 @@ main { max-width: 900px; margin: 0 auto; padding: var(--space-lg) var(--space-ba
 }
 .btn-text:hover { background: var(--color-surface); color: var(--color-text-primary); }
 .btn-text.strong { color: var(--color-text-primary); }
+.btn-text:disabled { opacity: 0.35; cursor: default; }
+.btn-text:disabled:hover { background: transparent; color: var(--color-text-secondary); }
 
 /* ---------- Results ---------- */
 .result-img { max-width: 260px; max-height: 220px; object-fit: cover; border-radius: var(--rounded-md); border: 1px solid var(--color-border); float: right; margin: 0 0 var(--space-base) var(--space-lg); }
@@ -258,7 +276,10 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
 .chip-tag .x:hover { color: var(--color-text-primary); }
 
 /* ---------- Flashcards ---------- */
+.cards-search { margin-bottom: var(--space-lg); }
+.review-note { display: flex; align-items: center; gap: var(--space-sm); margin-bottom: var(--space-base); }
 .cards-toolbar { display: flex; align-items: center; gap: var(--space-base); flex-wrap: wrap; margin-bottom: var(--space-lg); }
+.cards-toolbar .toolbar-right { display: flex; align-items: center; gap: var(--space-sm); margin-left: auto; }
 .mode-toggle { display: inline-flex; border: 1px solid var(--color-border-strong); border-radius: var(--rounded-full); overflow: hidden; }
 .mode-toggle button {
   background: transparent; border: none; cursor: pointer; padding: 0.375rem 1rem;
@@ -266,6 +287,10 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
 }
 .mode-toggle button.active { background: var(--color-text-primary); color: var(--color-background); }
 .cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: var(--space-base); }
+.pager {
+  display: flex; align-items: center; justify-content: center;
+  gap: var(--space-base); margin-top: var(--space-xl);
+}
 .flashcard {
   position: relative; background: var(--color-surface); border: 1px solid var(--color-border);
   border-radius: var(--rounded-md); padding: var(--space-lg); cursor: pointer; text-align: left;
