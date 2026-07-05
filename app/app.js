@@ -38,9 +38,12 @@ function glossaryApp() {
     suggestions: [], sugLoading: false, showDropdown: false, activeSug: -1,
     recent: [],
     result: null, resultState: 'idle', candidates: [], expanded: false,
-    cards: [], mode: 'overview', tagFilter: null, statusFilter: null, cardSearch: '',
+    cards: [], mode: 'overview', cardSearch: '',
+    tagFilters: [], reviewedFilter: 'all', exportedFilter: 'all', starFilter: false,
     cardPage: 1, cardPageSize: 12,
-    selectMode: false, selected: [], flipped: {}, reviewOrder: [], reviewSelection: [],
+    selectMode: false, selectIntent: 'review', selected: [], flipped: {}, reviewOrder: [],
+    // focused review session (#/review) — survives detours to a card's detail page
+    session: { ids: [], idx: 0, flipped: false, done: false },
     _histStack: [], _lastHash: '', _backNav: false,
     detailId: null,
     toolbar: { show: false, x: 0, y: 0, text: '', context: 'results' },
@@ -65,8 +68,10 @@ function glossaryApp() {
       // any change to the flashcard filters lands you back on page 1 —
       // a stale page index against a shorter filtered list would look empty
       this.$watch('cardSearch', () => { this.cardPage = 1; });
-      this.$watch('tagFilter', () => { this.cardPage = 1; });
-      this.$watch('statusFilter', () => { this.cardPage = 1; });
+      this.$watch('tagFilters', () => { this.cardPage = 1; });
+      this.$watch('reviewedFilter', () => { this.cardPage = 1; });
+      this.$watch('exportedFilter', () => { this.cardPage = 1; });
+      this.$watch('starFilter', () => { this.cardPage = 1; });
       this.$watch('mode', () => { this.cardPage = 1; });
     },
     route() {
@@ -87,10 +92,15 @@ function glossaryApp() {
         this.page = 'detail';
         this.detailId = parts[1];
         this.markReviewed(parts[1]);
+      } else if (p === 'review') {
+        // the session lives in component state, not the URL — a deep link or
+        // reload with no session running falls back to the collection page
+        if (this.session.ids.length) this.page = 'review';
+        else this.nav('cards');
       } else if (['home', 'cards', 'settings', 'pairing'].includes(p)) {
         this.page = p;
-        // re-entering the flashcards page refreshes the frozen review order
-        if (p === 'cards' && this.mode === 'review') this.reviewOrder = this.computeReviewOrder();
+        // re-entering the collection page refreshes the frozen flip-deck order
+        if (p === 'cards' && this.mode === 'flashcards') this.reviewOrder = this.computeReviewOrder();
         if (p === 'home') this.$nextTick(() => this.focusSearch());
       } else {
         this.page = 'home';
@@ -126,6 +136,12 @@ function glossaryApp() {
       const typing = ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName);
       if (e.key === '/' && !typing) { e.preventDefault(); this.focusSearch(); }
       if (e.key === 'Escape') { this.showDropdown = false; this.toolbar.show = false; }
+      // review session: arrows page through the deck, space flips the card
+      if (this.page === 'review' && !typing && !this.session.done) {
+        if (e.key === 'ArrowRight') this.sessionNext();
+        if (e.key === 'ArrowLeft') this.sessionPrev();
+        if (e.key === ' ') { e.preventDefault(); this.sessionFlip(); }
+      }
     },
     focusSearch() {
       const el = document.getElementById(this.page === 'home' ? 'search-home' : 'search-top');
@@ -254,6 +270,7 @@ function glossaryApp() {
         savedAt: Date.now(),
         lastReviewedAt: null,
         lastExportedAt: null,
+        starred: false,
         note: '',
         tags: [],
         highlights: [],
@@ -321,13 +338,11 @@ function glossaryApp() {
         this.nav('card', c.id);
       }
     },
-    reviewClick(c) {
-      if (!this.flipped[c.id]) {
-        this.flipped[c.id] = true;
-        this.markReviewed(c.id);
-      } else {
-        this.nav('card', c.id);
-      }
+    flipGridCard(c) {
+      // during selection a tap picks the card instead of flipping it
+      if (this.selectMode) { this.cardClick(c); return; }
+      this.flipped[c.id] = !this.flipped[c.id];
+      if (this.flipped[c.id]) this.markReviewed(c.id);
     },
     markReviewed(id) {
       const c = this.cards.find(x => x.id === id);
@@ -382,42 +397,108 @@ function glossaryApp() {
     },
     setMode(m) {
       this.mode = m; this.flipped = {};
-      this.reviewSelection = []; // mode switches always return to the full deck
-      if (m === 'review') { this.selectMode = false; this.selected = []; this.reviewOrder = this.computeReviewOrder(); }
+      if (m === 'flashcards') { this.selectMode = false; this.selected = []; this.reviewOrder = this.computeReviewOrder(); }
     },
-    toggleSelectMode() { this.selectMode = !this.selectMode; this.selected = []; },
+    /* Two entry points, one selection mode: "Start Review" and "Export" both
+       open selection with their own intent — each intent exposes exactly one
+       launch verb, so the user always knows what the selection is for. */
+    toggleSelectMode(intent = 'review') {
+      this.selectMode = !this.selectMode;
+      this.selectIntent = intent;
+      this.selected = [];
+    },
     /* "Select all" operates on the filtered set (tags + search + status), not the
        whole collection — filter to a topic, select all, review just that topic. */
+    selectAllVisible() { this.selected = this.visibleCards().map(c => c.id); },
+    clearSelection() { this.selected = []; },
     allVisibleSelected() {
       const vis = this.visibleCards();
       return vis.length > 0 && vis.every(c => this.selected.includes(c.id));
     },
-    toggleSelectAll() {
-      this.selected = this.allVisibleSelected() ? [] : this.visibleCards().map(c => c.id);
+    /* One launch verb per intent — the selection bar shows exactly one primary
+       action, so there is never more than one primary button in play. */
+    launchSelection() {
+      if (!this.selected.length) return;
+      if (this.selectIntent === 'review') this.startSession(this.selected);
+      else this.exportSheet = true;
     },
-    startReviewSelected() {
-      const ids = [...this.selected];
-      this.setMode('review'); // clears selection state
-      this.reviewSelection = ids;
+    toggleTagFilter(t) {
+      // reassign (never mutate) so the $watch that resets pagination fires
+      this.tagFilters = this.tagFilters.includes(t)
+        ? this.tagFilters.filter(x => x !== t)
+        : [...this.tagFilters, t];
     },
+
+    /* ---------- focused review session ---------- */
+    startSession(ids) {
+      const valid = ids.filter(id => this.cards.some(c => c.id === id));
+      if (!valid.length) return;
+      this.session = { ids: valid, idx: 0, flipped: false, done: false };
+      this.selectMode = false; this.selectIntent = 'review'; this.selected = [];
+      this.nav('review');
+    },
+    sessionCard() { return this.cards.find(c => c.id === this.session.ids[this.session.idx]) || null; },
+    sessionFlip() {
+      const c = this.sessionCard();
+      if (!c) return;
+      this.session.flipped = !this.session.flipped;
+      if (this.session.flipped) this.markReviewed(c.id); // revealing the answer counts as a review
+    },
+    sessionNext() {
+      if (this.session.idx < this.session.ids.length - 1) {
+        this.session.idx++; this.session.flipped = false;
+      } else {
+        this.finishSession();
+      }
+    },
+    sessionPrev() {
+      if (this.session.idx > 0) { this.session.idx--; this.session.flipped = false; }
+    },
+    shuffleSession() {
+      const a = [...this.session.ids];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      this.session.ids = a; this.session.idx = 0; this.session.flipped = false;
+      this.showToast('Shuffled');
+    },
+    toggleStar(id) {
+      const c = this.cards.find(x => x.id === id);
+      if (c) { c.starred = !c.starred; this.persistCards(); }
+    },
+    sessionStarredIds() {
+      return this.session.ids.filter(id => (this.cards.find(c => c.id === id) || {}).starred);
+    },
+    finishSession() {
+      // starred cards earn an offer to run them again; otherwise straight home
+      if (this.sessionStarredIds().length) this.session.done = true;
+      else { this.exitSession(); this.showToast('✓ Review complete'); }
+    },
+    reviewStarredAgain() { this.startSession(this.sessionStarredIds()); },
+    exitSession() {
+      this.session = { ids: [], idx: 0, flipped: false, done: false };
+      this.nav('cards');
+    },
+
     visibleCards() {
       let list = [...this.cards];
-      if (this.tagFilter) {
-        list = list.filter(c =>
-          (c.tags || []).includes(this.tagFilter) ||
-          (c.highlights || []).some(h => (h.tags || []).includes(this.tagFilter)));
+      if (this.tagFilters.length) {
+        // multiple tags widen the net (OR); the other filter rows narrow it (AND)
+        list = list.filter(c => this.tagFilters.some(t =>
+          (c.tags || []).includes(t) ||
+          (c.highlights || []).some(h => (h.tags || []).includes(t))));
       }
-      if (this.statusFilter === 'reviewed') list = list.filter(c => !!c.lastReviewedAt);
-      if (this.statusFilter === 'unreviewed') list = list.filter(c => !c.lastReviewedAt);
-      if (this.statusFilter === 'exported') list = list.filter(c => !!c.lastExportedAt);
-      if (this.statusFilter === 'unexported') list = list.filter(c => !c.lastExportedAt);
-      // a review session started from a selection sees only those cards
-      if (this.mode === 'review' && this.reviewSelection.length) {
-        list = list.filter(c => this.reviewSelection.includes(c.id));
+      if (this.reviewedFilter !== 'all') {
+        list = list.filter(c => this.reviewedFilter === 'yes' ? !!c.lastReviewedAt : !c.lastReviewedAt);
       }
+      if (this.exportedFilter !== 'all') {
+        list = list.filter(c => this.exportedFilter === 'yes' ? !!c.lastExportedAt : !c.lastExportedAt);
+      }
+      if (this.starFilter) list = list.filter(c => !!c.starred);
       const q = this.cardSearch.trim().toLowerCase();
       if (q) list = list.filter(c => (c.title || '').toLowerCase().includes(q) || (c.extract || '').toLowerCase().includes(q));
-      if (this.mode === 'review') {
+      if (this.mode === 'flashcards') {
         const order = this.reviewOrder;
         list.sort((a, b) => {
           const ia = order.indexOf(a.id), ib = order.indexOf(b.id);
@@ -790,6 +871,7 @@ function glossaryApp() {
         savedAt: num(raw.savedAt) || Date.now(),
         lastReviewedAt: num(raw.lastReviewedAt),
         lastExportedAt: num(raw.lastExportedAt),
+        starred: raw.starred === true,
         tags: Array.isArray(raw.tags) ? raw.tags.filter(t => typeof t === 'string' && t.trim()).map(t => t.trim()) : [],
         highlights: Array.isArray(raw.highlights) ? raw.highlights.map(h => this.sanitizeHighlight(h)).filter(Boolean) : [],
         drifted: false,

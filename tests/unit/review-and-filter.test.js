@@ -31,13 +31,13 @@ test('overview mode sorts newest-saved first', () => {
   assert.deepEqual(Array.from(comp.visibleCards().map((c) => c.id)), ['b', 'c', 'a']);
 });
 
-test('review mode follows the frozen review order, not save order', () => {
+test('flashcards mode follows the frozen review order, not save order', () => {
   const comp = newComp();
   comp.cards = [
     card({ id: 'a', savedAt: 300, lastReviewedAt: 50 }),
     card({ id: 'b', savedAt: 100, lastReviewedAt: null }),
   ];
-  comp.mode = 'review';
+  comp.mode = 'flashcards';
   comp.reviewOrder = comp.computeReviewOrder(); // ['b','a']
   assert.deepEqual(Array.from(comp.visibleCards().map((c) => c.id)), ['b', 'a']);
 });
@@ -49,9 +49,23 @@ test('tag filter spans both card-level and highlight-level tags', () => {
     card({ id: 'hltag', highlights: [{ id: 'h', text: 't', tags: ['sapiens'] }] }),
     card({ id: 'nomatch', tags: ['other'] }),
   ];
-  comp.tagFilter = 'sapiens';
+  comp.tagFilters = ['sapiens'];
   const ids = Array.from(comp.visibleCards().map((c) => c.id)).sort();
   assert.deepEqual(ids, ['cardtag', 'hltag']);
+});
+
+test('multiple selected tags widen the match (OR), and toggleTagFilter round-trips', () => {
+  const comp = newComp();
+  comp.cards = [
+    card({ id: 'a', tags: ['physics'] }),
+    card({ id: 'b', tags: ['biology'] }),
+    card({ id: 'c', tags: ['history'] }),
+  ];
+  comp.toggleTagFilter('physics');
+  comp.toggleTagFilter('biology');
+  assert.deepEqual(Array.from(comp.visibleCards().map((x) => x.id)).sort(), ['a', 'b']);
+  comp.toggleTagFilter('physics'); // toggle off
+  assert.deepEqual(Array.from(comp.visibleCards().map((x) => x.id)), ['b']);
 });
 
 test('text search matches title or extract, case-insensitively', () => {
@@ -65,7 +79,7 @@ test('text search matches title or extract, case-insensitively', () => {
   assert.deepEqual(Array.from(comp.visibleCards().map((c) => c.id)), ['b']);
 });
 
-test('status filter matches reviewed / exported timestamps', () => {
+test('segmented status filters match reviewed / exported timestamps', () => {
   const comp = newComp();
   comp.cards = [
     card({ id: 'rev', lastReviewedAt: 5 }),
@@ -73,40 +87,97 @@ test('status filter matches reviewed / exported timestamps', () => {
     card({ id: 'fresh' }),
   ];
   const ids = () => Array.from(comp.visibleCards().map((c) => c.id)).sort();
-  comp.statusFilter = 'reviewed';
+  comp.reviewedFilter = 'yes';
   assert.deepEqual(ids(), ['rev']);
-  comp.statusFilter = 'unreviewed';
+  comp.reviewedFilter = 'no';
   assert.deepEqual(ids(), ['exp', 'fresh']);
-  comp.statusFilter = 'exported';
+  comp.reviewedFilter = 'all';
+  comp.exportedFilter = 'yes';
   assert.deepEqual(ids(), ['exp']);
-  comp.statusFilter = 'unexported';
+  comp.exportedFilter = 'no';
   assert.deepEqual(ids(), ['fresh', 'rev']);
 });
 
-test('a review session from a selection sees only the selected cards', () => {
+test('star filter shows only starred cards', () => {
   const comp = newComp();
-  comp.cards = [card({ id: 'a' }), card({ id: 'b' }), card({ id: 'c' })];
-  comp.selected = ['a', 'c'];
-  comp.startReviewSelected();
-  assert.equal(comp.mode, 'review');
-  assert.deepEqual(Array.from(comp.visibleCards().map((c) => c.id)).sort(), ['a', 'c']);
-  comp.reviewSelection = []; // REVIEW ALL escape hatch
-  assert.equal(comp.visibleCards().length, 3);
+  comp.cards = [card({ id: 'a', starred: true }), card({ id: 'b' })];
+  comp.starFilter = true;
+  assert.deepEqual(Array.from(comp.visibleCards().map((c) => c.id)), ['a']);
 });
 
-test('toggleSelectAll selects exactly the filtered set, then clears', () => {
+test('a review session walks the selected cards, marks them reviewed, and exits clean', () => {
+  const comp = newComp();
+  comp.cards = [card({ id: 'a' }), card({ id: 'b' }), card({ id: 'c' })];
+  comp.startSession(['a', 'c']);
+  assert.deepEqual(Array.from(comp.session.ids), ['a', 'c']);
+  assert.equal(comp.sessionCard().id, 'a');
+
+  comp.sessionFlip(); // reveal = reviewed
+  assert.ok(comp.cards.find((c) => c.id === 'a').lastReviewedAt, 'flip stamps lastReviewedAt');
+  comp.sessionNext();
+  assert.equal(comp.sessionCard().id, 'c');
+  assert.equal(comp.session.flipped, false, 'advancing resets the flip');
+
+  comp.sessionNext(); // past the last card, nothing starred → session ends
+  assert.equal(comp.session.ids.length, 0);
+  assert.equal(comp.toast, '✓ Review complete');
+});
+
+test('finishing with starred cards offers a starred-only second pass', () => {
+  const comp = newComp();
+  comp.cards = [card({ id: 'a' }), card({ id: 'b' })];
+  comp.startSession(['a', 'b']);
+  comp.toggleStar('a');
+  comp.session.idx = 1;
+  comp.sessionNext(); // finish
+  assert.equal(comp.session.done, true, 'completion screen instead of instant exit');
+  comp.reviewStarredAgain();
+  assert.deepEqual(Array.from(comp.session.ids), ['a']);
+  assert.equal(comp.session.done, false);
+});
+
+test('shuffleSession keeps the same cards and returns to the first position', () => {
+  const comp = newComp();
+  comp.cards = [card({ id: 'a' }), card({ id: 'b' }), card({ id: 'c' })];
+  comp.startSession(['a', 'b', 'c']);
+  comp.session.idx = 2; comp.session.flipped = true;
+  comp.shuffleSession();
+  assert.deepEqual(Array.from(comp.session.ids).sort(), ['a', 'b', 'c']);
+  assert.equal(comp.session.idx, 0);
+  assert.equal(comp.session.flipped, false);
+});
+
+test('selectAllVisible picks the filtered set; clearSelection empties it', () => {
   const comp = newComp();
   comp.cards = [
     card({ id: 'a', tags: ['x'] }),
     card({ id: 'b', tags: ['x'] }),
     card({ id: 'c', tags: ['y'] }),
   ];
-  comp.tagFilter = 'x';
-  comp.toggleSelectAll();
+  comp.tagFilters = ['x'];
+  comp.selectAllVisible();
   assert.deepEqual(Array.from(comp.selected).sort(), ['a', 'b']);
   assert.equal(comp.allVisibleSelected(), true);
-  comp.toggleSelectAll();
+  comp.clearSelection();
   assert.deepEqual(Array.from(comp.selected), []);
+});
+
+test('launchSelection routes by intent: review starts a session, export opens the sheet', () => {
+  const comp = newComp();
+  comp.cards = [card({ id: 'a' }), card({ id: 'b' })];
+
+  comp.selectIntent = 'review';
+  comp.selected = ['a', 'b'];
+  comp.launchSelection();
+  assert.deepEqual(Array.from(comp.session.ids), ['a', 'b'], 'review intent launches the session');
+  assert.equal(comp.selectMode, false, 'launching leaves selection mode');
+
+  const comp2 = newComp();
+  comp2.cards = [card({ id: 'a' })];
+  comp2.selectIntent = 'export';
+  comp2.selected = ['a'];
+  comp2.launchSelection();
+  assert.equal(comp2.exportSheet, true, 'export intent opens the export sheet');
 });
 
 test('allTags returns a de-duplicated, sorted union of all tags', () => {

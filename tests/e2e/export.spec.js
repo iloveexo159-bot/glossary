@@ -7,7 +7,7 @@ test('select a card, open the export sheet, and download a Markdown file', async
   await openApp(page, { seed: [seedCard({ title: 'Atom', extract: 'An atom.' })] });
   await hashTo(page, '#/cards');
 
-  await page.getByRole('button', { name: 'Select', exact: true }).click();
+  await page.getByRole('button', { name: 'Export', exact: true }).click();
   await page.locator('.flashcard').click(); // select it
   await expect(page.locator('.flashcard.selected')).toHaveCount(1);
 
@@ -24,17 +24,18 @@ test('select a card, open the export sheet, and download a Markdown file', async
   ]);
   expect(download.suggestedFilename()).toMatch(/Atom\.(md|zip)/);
 
-  // export stamps the card, so the "Exported" status filter now catches it
-  await page.getByRole('button', { name: 'Exported', exact: true }).click();
+  // export stamps the card, so the segmented "Exported" filter now catches it
+  const exportedGroup = page.getByRole('group', { name: 'Exported filter' });
+  await exportedGroup.getByRole('button', { name: 'Yes', exact: true }).click();
   await expect(page.locator('.flashcard')).toHaveCount(1);
-  await page.getByRole('button', { name: 'Not exported', exact: true }).click();
+  await exportedGroup.getByRole('button', { name: 'No', exact: true }).click();
   await expect(page.locator('.flashcard')).toHaveCount(0);
 });
 
 test('cancelling selection clears the selected state', async ({ page }) => {
   await openApp(page, { seed: [seedCard({ title: 'Atom' })] });
   await hashTo(page, '#/cards');
-  await page.getByRole('button', { name: 'Select', exact: true }).click();
+  await page.getByRole('button', { name: 'Export', exact: true }).click();
   await page.locator('.flashcard').click();
   await expect(page.locator('.flashcard.selected')).toHaveCount(1);
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();

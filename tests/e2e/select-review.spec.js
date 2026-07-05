@@ -1,49 +1,104 @@
-/* Unified selection mode (PRD §3 "Revise/study" + "Curate/export"): one Select
-   button, Select all over the filtered set, Review (n) restricted to the
-   selection. Also covers the status filter and the search box resetting
-   between pages. */
+/* Focused review sessions (Create review session → select → #/review) plus
+   the collection filters and the search box resetting between pages. */
 const { test, expect } = require('@playwright/test');
 const { openApp, hashTo, seedCard } = require('./helpers');
 
-test('tag filter → select all → review only that selection, with escape hatch', async ({ page }) => {
+async function startSessionOf(page, count) {
+  await page.getByRole('button', { name: 'Review', exact: true }).click();
+  await page.getByRole('button', { name: 'Select all', exact: true }).click();
+  await page.getByRole('button', { name: `Review (${count})`, exact: true }).click();
+  await expect(page).toHaveURL(/#\/review/);
+}
+
+test('tag filter → create review session → flip, advance, and finish back at the collection', async ({ page }) => {
   await openApp(page, { seed: [
-    seedCard({ id: 'a', title: 'Atom', tags: ['physics'] }),
-    seedCard({ id: 'b', title: 'Gravity', tags: ['physics'] }),
+    seedCard({ id: 'a', title: 'Atom', tags: ['physics'], extract: 'An atom.' }),
+    seedCard({ id: 'b', title: 'Gravity', tags: ['physics'], extract: 'A force.' }),
     seedCard({ id: 'c', title: 'Cell', tags: ['biology'] }),
   ] });
   await hashTo(page, '#/cards');
 
   await page.getByRole('button', { name: '#physics', exact: true }).click();
-  await page.getByRole('button', { name: 'Select', exact: true }).click();
-  await page.getByRole('button', { name: 'Select all', exact: true }).click();
-  await expect(page.locator('.flashcard.selected')).toHaveCount(2);
+  await startSessionOf(page, 2);
+  await expect(page.locator('.session-controls')).toContainText('1 / 2');
 
-  await page.getByRole('button', { name: 'Review (2)', exact: true }).click();
-  await expect(page.locator('.review-card:visible')).toHaveCount(2);
-  await expect(page.locator('.review-note')).toContainText('Reviewing 2 selected');
+  const card = page.locator('.session-card');
+  await card.locator('.flip-area').click(); // reveal the answer
+  await expect(card).toHaveClass(/flipped/);
 
-  // REVIEW ALL lifts the selection restriction (tag filter stays until cleared)
-  await page.getByRole('button', { name: 'REVIEW ALL', exact: true }).click();
-  await expect(page.locator('.review-note')).toBeHidden();
-  await expect(page.locator('.review-card:visible')).toHaveCount(2);
-  await page.getByRole('button', { name: 'All', exact: true }).click();
-  await expect(page.locator('.review-card:visible')).toHaveCount(3);
+  await page.getByRole('button', { name: 'Next card' }).click();
+  await expect(page.locator('.session-controls')).toContainText('2 / 2');
+  await expect(card).not.toHaveClass(/flipped/); // advancing resets the flip
+
+  // finishing with nothing starred returns straight to the collection
+  await page.getByRole('button', { name: 'Finish session' }).click();
+  await expect(page).toHaveURL(/#\/cards/);
 });
 
-test('status filter separates reviewed from unreviewed cards', async ({ page }) => {
+test('starring during a session offers a starred-only second pass', async ({ page }) => {
+  await openApp(page, { seed: [
+    seedCard({ id: 'a', title: 'Atom' }),
+    seedCard({ id: 'b', title: 'Cell' }),
+  ] });
+  await hashTo(page, '#/cards');
+  await startSessionOf(page, 2);
+
+  await page.locator('.session-card .star-btn').click(); // star card 1
+  await page.getByRole('button', { name: 'Next card' }).click();
+  await page.getByRole('button', { name: 'Finish session' }).click();
+
+  await expect(page.locator('.state-box:visible')).toContainText('Session complete');
+  await page.getByRole('button', { name: /Review starred again \(1\)/ }).click();
+  await expect(page.locator('.session-controls')).toContainText('1 / 1');
+});
+
+test('View full article detours to detail; back resumes the session in place', async ({ page }) => {
+  await openApp(page, { seed: [
+    seedCard({ id: 'a', title: 'Atom', extract: 'An atom.' }),
+    seedCard({ id: 'b', title: 'Cell' }),
+  ] });
+  await hashTo(page, '#/cards');
+  await startSessionOf(page, 2);
+
+  // the article link lives on the back face — reveal the answer first
+  await page.locator('.session-card .flip-area').click();
+  await page.locator('.session-card .card-article-link').click();
+  await expect(page.locator('.page-title:visible')).toHaveText('Atom');
+
+  await page.locator('.top-bar .icon-btn[aria-label="Back"]').click();
+  await expect(page).toHaveURL(/#\/review/);
+  await expect(page.locator('.session-controls')).toContainText('1 / 2');
+});
+
+test('segmented status filter separates reviewed from unreviewed cards', async ({ page }) => {
   await openApp(page, { seed: [
     seedCard({ id: 'r', title: 'Atom', lastReviewedAt: Date.now() }),
     seedCard({ id: 'n', title: 'Cell' }),
   ] });
   await hashTo(page, '#/cards');
 
-  await page.getByRole('button', { name: 'Not reviewed', exact: true }).click();
+  const reviewedGroup = page.getByRole('group', { name: 'Reviewed filter' });
+  await reviewedGroup.getByRole('button', { name: 'No', exact: true }).click();
   await expect(page.locator('.flashcard .term')).toHaveText('Cell');
-  await page.getByRole('button', { name: 'Reviewed', exact: true }).click();
+  await reviewedGroup.getByRole('button', { name: 'Yes', exact: true }).click();
   await expect(page.locator('.flashcard .term')).toHaveText('Atom');
-  // clicking the active chip clears the filter
-  await page.getByRole('button', { name: 'Reviewed', exact: true }).click();
+  await reviewedGroup.getByRole('button', { name: 'All', exact: true }).click();
   await expect(page.locator('.flashcard')).toHaveCount(2);
+});
+
+test('multiple tag chips select together (OR)', async ({ page }) => {
+  await openApp(page, { seed: [
+    seedCard({ id: 'a', title: 'Atom', tags: ['physics'] }),
+    seedCard({ id: 'b', title: 'Cell', tags: ['biology'] }),
+    seedCard({ id: 'c', title: 'Rome', tags: ['history'] }),
+  ] });
+  await hashTo(page, '#/cards');
+
+  await page.getByRole('button', { name: '#physics', exact: true }).click();
+  await page.getByRole('button', { name: '#biology', exact: true }).click();
+  await expect(page.locator('.flashcard')).toHaveCount(2);
+  await page.locator('.chip-row').getByRole('button', { name: 'All', exact: true }).click();
+  await expect(page.locator('.flashcard')).toHaveCount(3);
 });
 
 test('flashcard search shows a clear (X) button that resets the filter', async ({ page }) => {

@@ -21,16 +21,21 @@ test('overview → detail → back returns to the flashcards list', async ({ pag
   await expect(page.locator('.flashcard .term')).toHaveText('Atom');
 });
 
-test('review mode flips a card then opens its detail on a second tap', async ({ page }) => {
+test('flashcards mode flips a card both ways; the footer strip opens detail', async ({ page }) => {
   await openApp(page, { seed: [seedCard({ title: 'Atom', extract: 'An atom is the basic particle of matter.' })] });
   await hashTo(page, '#/cards');
-  await page.getByRole('button', { name: 'Review', exact: true }).click();
+  await page.getByRole('button', { name: 'Flashcards', exact: true }).click();
 
   const rc = page.locator('.review-card:visible').first();
   await expect(rc).toContainText('Atom');
-  await rc.click(); // flip
-  await expect(rc).toContainText('An atom is');
-  await rc.click(); // → detail
+  await rc.locator('.flip-area').click(); // flip to summary
+  await expect(rc).toHaveClass(/flipped/);
+  await rc.locator('.flip-area').click(); // flip back to the term
+  await expect(rc).not.toHaveClass(/flipped/);
+
+  // the article strip only exists on the back face — flip again, then follow it
+  await rc.locator('.flip-area').click();
+  await rc.locator('.card-article-link').click();
   await expect(page.locator('.page-title:visible')).toHaveText('Atom');
 });
 

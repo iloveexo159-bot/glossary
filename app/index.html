@@ -70,7 +70,7 @@
 
   <nav class="top-links" aria-label="Primary">
     <a href="#/home" :class="{ active: page==='home' || page==='results' }">Home</a>
-    <a href="#/cards" :class="{ active: page==='cards' || page==='detail' }">Flashcards</a>
+    <a href="#/cards" :class="{ active: page==='cards' || page==='detail' || page==='review' }">Collection</a>
   </nav>
 
   <button class="icon-btn" @click="nav('settings')" aria-label="Settings">
@@ -203,7 +203,7 @@
 
   <!-- ============ FLASHCARDS ============ -->
   <section x-show="page==='cards'" x-cloak>
-    <h1 class="page-title">My Flashcards</h1>
+    <h1 class="page-title">My Collection</h1>
 
     <!-- Flashcards search lives with the content it filters, not in the top bar —
          a lingering filter there was invisible and made saved cards "disappear" -->
@@ -218,46 +218,60 @@
     <div class="cards-toolbar">
       <div class="mode-toggle" role="tablist" aria-label="Display mode">
         <button :class="{ active: mode==='overview' }" @click="setMode('overview')">Overview</button>
-        <button :class="{ active: mode==='review' }" @click="setMode('review')">Review</button>
+        <button :class="{ active: mode==='flashcards' }" @click="setMode('flashcards')">Flashcards</button>
       </div>
-      <!-- One selection mode, many verbs: pick cards first, then Review or Export them -->
-      <div class="toolbar-right">
-        <button class="btn-outline" x-show="selectMode" x-cloak @click="toggleSelectAll()"
-                x-text="allVisibleSelected() ? 'Clear all' : 'Select all'"></button>
-        <button class="btn-outline" x-show="selectMode && selected.length" x-cloak @click="startReviewSelected()"
-                x-text="'Review (' + selected.length + ')'"></button>
-        <button class="btn-primary" x-show="selectMode && selected.length" x-cloak @click="exportSheet = true"
-                x-text="'Export (' + selected.length + ')'"></button>
-        <button class="btn-outline" x-show="mode==='overview' && cards.length" @click="toggleSelectMode()"
-                x-text="selectMode ? 'Cancel' : 'Select'"></button>
+      <!-- Two doors into selection: Review and Export. Each declares intent up
+           front, so the selection bar shows exactly one launch verb. -->
+      <div class="toolbar-right" x-show="!selectMode && cards.length" x-cloak>
+        <button class="btn-primary" @click="toggleSelectMode('review')">Review</button>
+        <button class="btn-outline" @click="toggleSelectMode('export')">Export</button>
       </div>
     </div>
 
-    <!-- Status filter — ANDs with tags and text search. Click the active chip to clear. -->
-    <div class="chip-row" style="margin-bottom:var(--space-md);" x-show="cards.length">
-      <span class="caption" style="align-self:center;">Status</span>
-      <button class="chip-filter" :class="{ active: statusFilter==='unreviewed' }"
-              @click="statusFilter = (statusFilter==='unreviewed' ? null : 'unreviewed')">Not reviewed</button>
-      <button class="chip-filter" :class="{ active: statusFilter==='reviewed' }"
-              @click="statusFilter = (statusFilter==='reviewed' ? null : 'reviewed')">Reviewed</button>
-      <button class="chip-filter" :class="{ active: statusFilter==='unexported' }"
-              @click="statusFilter = (statusFilter==='unexported' ? null : 'unexported')">Not exported</button>
-      <button class="chip-filter" :class="{ active: statusFilter==='exported' }"
-              @click="statusFilter = (statusFilter==='exported' ? null : 'exported')">Exported</button>
+    <!-- Selection action bar (own row) — appears only while picking cards.
+         Keeps the browse toolbar stable; gives the management verbs room. -->
+    <div class="select-bar" x-show="selectMode" x-cloak>
+      <span class="caption select-bar-count"
+            x-text="selected.length + ' selected · ' + (selectIntent==='review' ? 'Review' : 'Export')"></span>
+      <div class="select-bar-actions">
+        <button class="btn-text" @click="selectAllVisible()">Select all</button>
+        <button class="btn-text" @click="clearSelection()" :disabled="!selected.length">Clear</button>
+        <button class="btn-text" @click="toggleSelectMode()">Cancel</button>
+        <button class="btn-primary" x-show="selected.length" x-cloak @click="launchSelection()"
+                x-text="(selectIntent==='review' ? 'Review (' : 'Export (') + selected.length + ')'"></button>
+      </div>
     </div>
 
+    <!-- Status filters: two binary questions, two compact segmented toggles.
+         AND semantics with tags, star, and text search. -->
+    <div class="filters-row" x-show="cards.length">
+      <div class="filter-group" role="group" aria-label="Reviewed filter">
+        <span class="caption">Reviewed</span>
+        <div class="mode-toggle mode-toggle-sm">
+          <button :class="{ active: reviewedFilter==='all' }" @click="reviewedFilter='all'">All</button>
+          <button :class="{ active: reviewedFilter==='yes' }" @click="reviewedFilter='yes'">Yes</button>
+          <button :class="{ active: reviewedFilter==='no' }" @click="reviewedFilter='no'">No</button>
+        </div>
+      </div>
+      <div class="filter-group" role="group" aria-label="Exported filter">
+        <span class="caption">Exported</span>
+        <div class="mode-toggle mode-toggle-sm">
+          <button :class="{ active: exportedFilter==='all' }" @click="exportedFilter='all'">All</button>
+          <button :class="{ active: exportedFilter==='yes' }" @click="exportedFilter='yes'">Yes</button>
+          <button :class="{ active: exportedFilter==='no' }" @click="exportedFilter='no'">No</button>
+        </div>
+      </div>
+      <button class="chip-filter" :class="{ active: starFilter }" @click="starFilter = !starFilter"
+              :aria-pressed="starFilter">★ Starred</button>
+    </div>
+
+    <!-- Tag chips: multi-select, OR within the row -->
     <div class="chip-row" style="margin-bottom:var(--space-lg);" x-show="allTags().length">
       <span class="caption" style="align-self:center;">Tags</span>
-      <button class="chip-filter" :class="{ active: tagFilter===null }" @click="tagFilter = null">All</button>
+      <button class="chip-filter" :class="{ active: tagFilters.length === 0 }" @click="tagFilters = []">All</button>
       <template x-for="t in allTags()" :key="t">
-        <button class="chip-filter" :class="{ active: tagFilter===t }" @click="tagFilter = (tagFilter===t ? null : t)" x-text="'#' + t"></button>
+        <button class="chip-filter" :class="{ active: tagFilters.includes(t) }" @click="toggleTagFilter(t)" x-text="'#' + t"></button>
       </template>
-    </div>
-
-    <!-- Restricted review session (started from a selection) -->
-    <div class="review-note" x-show="mode==='review' && reviewSelection.length" x-cloak>
-      <span class="caption" x-text="'Reviewing ' + reviewSelection.length + ' selected card' + (reviewSelection.length === 1 ? '' : 's')"></span>
-      <button class="btn-text" @click="reviewSelection = []">REVIEW ALL</button>
     </div>
 
     <div class="state-box" x-show="cards.length === 0">
@@ -269,8 +283,13 @@
     <!-- Overview mode -->
     <div class="cards-grid" x-show="mode==='overview'">
       <template x-for="c in pagedCards()" :key="c.id">
-        <button class="flashcard" :class="{ selected: selected.includes(c.id) }" @click="cardClick(c)">
+        <div class="flashcard" :class="{ selected: selected.includes(c.id) }" @click="cardClick(c)"
+             role="button" tabindex="0" :aria-label="'Open ' + c.title"
+             @keydown.enter.prevent="cardClick(c)">
           <span class="select-check" x-show="selectMode" x-text="selected.includes(c.id) ? '✓' : ''" x-cloak></span>
+          <button class="icon-btn star-btn" :class="{ starred: c.starred }" @click.stop="toggleStar(c.id)"
+                  :aria-pressed="!!c.starred" :aria-label="(c.starred ? 'Unstar ' : 'Star ') + c.title"
+                  x-text="c.starred ? '★' : '☆'"></button>
           <div class="badges"><span class="badge-drift" x-show="c.drifted" x-cloak>Updated on Wikipedia</span></div>
           <div class="term" x-text="c.title"></div>
           <div class="date caption" x-text="cardMeta(c)"></div>
@@ -278,22 +297,36 @@
           <div class="chip-row">
             <template x-for="t in cardTags(c)" :key="t"><span class="chip-tag" x-text="'#' + t"></span></template>
           </div>
-        </button>
+        </div>
       </template>
     </div>
 
-    <!-- Review mode -->
-    <div class="cards-grid" x-show="mode==='review'" x-cloak>
+    <!-- Flashcards mode: the whole card flips; the article link lives on the
+         back face, so it only exists once the answer is revealed -->
+    <div class="cards-grid" x-show="mode==='flashcards'" x-cloak>
       <template x-for="c in pagedCards()" :key="c.id">
-        <button class="review-card" @click="reviewClick(c)">
-          <template x-if="!flipped[c.id]">
-            <span class="term-big" x-text="c.title"></span>
-          </template>
-          <template x-if="flipped[c.id]">
-            <span class="summary" x-text="c.extract.slice(0, 220) + (c.extract.length > 220 ? '…' : '')"></span>
-          </template>
-          <span class="caption" x-text="flipped[c.id] ? 'Tap again for details' : 'Tap to flip'"></span>
-        </button>
+        <div class="review-card" :class="{ flipped: flipped[c.id], selected: selected.includes(c.id) }">
+          <span class="select-check" x-show="selectMode" x-text="selected.includes(c.id) ? '✓' : ''" x-cloak></span>
+          <button class="icon-btn star-btn" :class="{ starred: c.starred }" @click.stop="toggleStar(c.id)"
+                  :aria-pressed="!!c.starred" :aria-label="(c.starred ? 'Unstar ' : 'Star ') + c.title"
+                  x-text="c.starred ? '★' : '☆'"></button>
+          <div class="flip-area" role="button" tabindex="0" @click="flipGridCard(c)"
+               @keydown.enter.prevent="flipGridCard(c)" @keydown.space.prevent="flipGridCard(c)"
+               :aria-label="'Flip card: ' + c.title" :aria-pressed="!!flipped[c.id]">
+            <span class="face front">
+              <span class="term-big" x-text="c.title"></span>
+              <span class="caption">Tap to flip</span>
+            </span>
+            <span class="face back">
+              <span class="back-body">
+                <span class="summary" x-text="c.extract.slice(0, 220) + (c.extract.length > 220 ? '…' : '')"></span>
+                <span class="caption">Tap to flip back</span>
+              </span>
+              <button class="card-article-link" :tabindex="flipped[c.id] ? 0 : -1"
+                      @click.stop="nav('card', c.id)">View full article</button>
+            </span>
+          </div>
+        </div>
       </template>
     </div>
 
@@ -304,6 +337,65 @@
     </div>
 
     <div class="book-footer caption" x-show="cards.length" x-text="footerText()"></div>
+  </section>
+
+  <!-- ============ REVIEW SESSION (focused mode) ============ -->
+  <section x-show="page==='review'" x-cloak>
+    <template x-if="sessionCard() && !session.done">
+      <div class="session-wrap">
+        <div class="session-top">
+          <span class="caption" x-text="'Review session · ' + session.ids.length + ' card' + (session.ids.length === 1 ? '' : 's')"></span>
+          <button class="icon-btn" @click="shuffleSession()" aria-label="Shuffle cards" title="Shuffle">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 3h5v5"/><path d="M4 20 21 3"/><path d="M21 16v5h-5"/><path d="m15 15 6 6"/><path d="M4 4l5 5"/></svg>
+          </button>
+        </div>
+
+        <div class="session-card" :class="{ flipped: session.flipped }">
+          <button class="icon-btn star-btn" :class="{ starred: sessionCard().starred }"
+                  @click="toggleStar(sessionCard().id)"
+                  :aria-pressed="!!sessionCard().starred" aria-label="Star this card for another pass"
+                  x-text="sessionCard().starred ? '★' : '☆'"></button>
+          <div class="flip-area" role="button" tabindex="0" @click="sessionFlip()"
+               @keydown.enter.prevent="sessionFlip()"
+               :aria-label="'Flip card: ' + sessionCard().title" :aria-pressed="session.flipped">
+            <span class="face front">
+              <span class="term-big" x-text="sessionCard().title"></span>
+              <span class="caption">Tap to reveal</span>
+            </span>
+            <span class="face back">
+              <span class="back-body">
+                <span class="summary" x-text="sessionCard().extract"></span>
+                <span class="caption">Tap to flip back</span>
+              </span>
+              <button class="card-article-link" :tabindex="session.flipped ? 0 : -1"
+                      @click.stop="nav('card', sessionCard().id)">View full article</button>
+            </span>
+          </div>
+        </div>
+
+        <div class="session-controls">
+          <button class="icon-btn" @click="sessionPrev()" :disabled="session.idx === 0" aria-label="Previous card">←</button>
+          <span class="caption" x-text="(session.idx + 1) + ' / ' + session.ids.length"></span>
+          <button class="icon-btn" @click="sessionNext()"
+                  :aria-label="session.idx === session.ids.length - 1 ? 'Finish session' : 'Next card'">→</button>
+        </div>
+      </div>
+    </template>
+
+    <!-- Completion: only shown when starred cards earn a second pass -->
+    <div class="state-box" x-show="session.done" x-cloak>
+      <p><b>Session complete.</b></p>
+      <p x-text="'You starred ' + sessionStarredIds().length + ' card' + (sessionStarredIds().length === 1 ? '' : 's') + ' for another pass.'"></p>
+      <div style="display:flex;gap:var(--space-sm);justify-content:center;flex-wrap:wrap;">
+        <button class="btn-primary" @click="reviewStarredAgain()" x-text="'Review starred again (' + sessionStarredIds().length + ')'"></button>
+        <button class="btn-outline" @click="exitSession()">Back to collection</button>
+      </div>
+    </div>
+
+    <div class="state-box" x-show="!sessionCard() && !session.done">
+      <p>No review session is running.</p>
+      <button class="btn-outline" @click="nav('cards')">Back to collection</button>
+    </div>
   </section>
 
   <!-- ============ DETAIL ============ -->
@@ -435,7 +527,7 @@
 <!-- ============ BOTTOM NAV (mobile) ============ -->
 <nav class="nav-bottom" aria-label="Primary">
   <a href="#/home" :class="{ active: page==='home' || page==='results' }">Home</a>
-  <a href="#/cards" :class="{ active: page==='cards' || page==='detail' }">Flashcards</a>
+  <a href="#/cards" :class="{ active: page==='cards' || page==='detail' || page==='review' }">Collection</a>
 </nav>
 
 <!-- ============ SELECTION TOOLBAR ============ -->
