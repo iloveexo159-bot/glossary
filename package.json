@@ -1,0 +1,15 @@
+{
+  "name": "wikisearch-tests",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Test tooling for the Glossary app. The app itself stays build-free; this package.json exists ONLY for the dev-time test suite.",
+  "scripts": {
+    "test:unit": "node --test \"tests/unit/**/*.test.js\"",
+    "test:e2e": "playwright test",
+    "test": "npm run test:unit && npm run test:e2e",
+    "serve": "node tests/e2e/static-server.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0"
+  }
+}

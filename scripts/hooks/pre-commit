@@ -1,0 +1,49 @@
+#!/bin/sh
+# ============================================================
+# Glossary — pre-commit test gate
+#
+# Git runs this automatically right BEFORE it saves a commit.
+# It runs the FAST unit tests (npm run test:unit) — instant and works
+# offline. If any test fails, the commit is STOPPED so you never save
+# broken code by accident.
+#
+# The browser tests (npm run test:e2e) are NOT run here — run them by
+# hand when you want the full sweep, e.g. before pushing.
+#
+# Emergency bypass (skips the check):  git commit --no-verify
+#
+# This hook is turned on by:  git config core.hooksPath scripts/hooks
+# ============================================================
+
+echo ""
+echo "Running tests before saving your commit..."
+echo ""
+
+# Some editors/GUIs commit without Node on their PATH — add the
+# standard Windows install location if npm isn't already findable.
+if ! command -v npm >/dev/null 2>&1; then
+  export PATH="$PATH:/c/Program Files/nodejs"
+fi
+
+if ! command -v npm >/dev/null 2>&1; then
+  echo "Could not find Node/npm. Install Node or add it to your PATH, then commit again."
+  exit 1
+fi
+
+# Git runs hooks from the repo root, where package.json lives.
+npm run test:unit
+STATUS=$?
+
+if [ "$STATUS" -ne 0 ]; then
+  echo ""
+  echo "Some tests FAILED - commit stopped so you don't save broken code."
+  echo "Read the report above, fix the problem, then commit again."
+  echo "(Only if you must: git commit --no-verify  skips this check.)"
+  echo ""
+  exit 1
+fi
+
+echo ""
+echo "All tests passed - saving your commit."
+echo ""
+exit 0

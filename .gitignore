@@ -5,3 +5,9 @@ Thumbs.db
 # Editor/OS scratch
 *.tmp
 ~$*
+
+# Test tooling (dev-only; the app itself stays build-free)
+node_modules/
+test-results/
+playwright-report/
+.playwright/
