@@ -444,8 +444,16 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
 
   <h3>Chips</h3>
   <div class="demo-block">
-    <div class="demo-label">chip-filter / chip-filter-active · tag bubble filters</div>
-    <div class="demo-row">
+    <div class="demo-label">chip-filter / chip-filter-active · two labelled rows on Flashcards — Status above Tags · one active per row, click again to clear, rows AND together</div>
+    <div class="demo-row" style="align-items:center;">
+      <span style="font-family:var(--font-sans);font-size:var(--type-caption-size);font-weight:700;letter-spacing:var(--type-caption-ls);text-transform:uppercase;color:var(--color-text-muted);">Status</span>
+      <span class="chip-filter is-active">Not reviewed</span>
+      <span class="chip-filter">Reviewed</span>
+      <span class="chip-filter">Not exported</span>
+      <span class="chip-filter">Exported</span>
+    </div>
+    <div class="demo-row" style="align-items:center;">
+      <span style="font-family:var(--font-sans);font-size:var(--type-caption-size);font-weight:700;letter-spacing:var(--type-caption-ls);text-transform:uppercase;color:var(--color-text-muted);">Tags</span>
       <span class="chip-filter is-active">All</span>
       <span class="chip-filter">#history</span>
       <span class="chip-filter">#physics</span>
@@ -457,6 +465,25 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
 
   <h3>Flashcards</h3>
   <div class="demo-block">
+    <div class="demo-label">page order: title → saved-cards search (full input-search anatomy, in the page — not the top bar) → toolbar → Status/Tags rows → grid</div>
+    <div class="demo-label">selection toolbar · one Select mode, many verbs — mode toggle left, actions pinned right · Export keeps primary weight</div>
+    <div class="demo-row" style="align-items:center;">
+      <button class="btn-outline">Select all</button>
+      <button class="btn-outline">Review (3)</button>
+      <button class="btn-primary">Export (3)</button>
+      <button class="btn-outline">Cancel</button>
+    </div>
+    <div class="demo-label">restricted review banner · caption + REVIEW ALL escape hatch, shown while a selection-scoped session runs</div>
+    <div class="demo-row" style="align-items:center;">
+      <span style="font-family:var(--font-sans);font-size:var(--type-caption-size);font-weight:700;letter-spacing:var(--type-caption-ls);text-transform:uppercase;color:var(--color-text-muted);">Reviewing 3 selected cards</span>
+      <button class="btn-text">REVIEW ALL</button>
+    </div>
+    <div class="demo-label">pager · 12 cards per page, filter changes snap back to page 1 · button-text + caption, centered between grid and book footer</div>
+    <div class="demo-row" style="align-items:center;justify-content:center;">
+      <button class="btn-text">← PREVIOUS</button>
+      <span style="font-family:var(--font-sans);font-size:var(--type-caption-size);font-weight:700;letter-spacing:var(--type-caption-ls);text-transform:uppercase;color:var(--color-text-muted);">Page 1 of 2</span>
+      <button class="btn-text">NEXT →</button>
+    </div>
     <div class="demo-row" style="align-items:stretch;">
       <div class="flashcard">
         <div class="term">Great Wall of China</div>
@@ -538,13 +565,13 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
 
   <h3>Device chrome</h3>
   <div class="demo-block">
-    <div class="demo-label">nav-top · three contexts — Home keeps only nav + Settings (search is a centered hero, below); Results and Flashcards carry the search field</div>
-    <div class="nav-top-demo"><span style="font-family:var(--font-serif);font-weight:700;">Glossary</span><span class="spacer"></span><span style="color:var(--color-text-primary);font-weight:700;text-decoration:underline;text-underline-offset:5px;">Home</span><span style="color:var(--color-text-secondary);">Flashcards</span><button class="icon-btn" aria-label="Settings">⚙</button></div>
-    <p class="note" style="margin:0.375rem 0;">Home — nav links + Settings only (no search in the bar)</p>
-    <div class="nav-top-demo"><span>←</span><div class="search-wrap" style="flex:1;"><svg class="icon lead" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg><input class="input-search" style="height:2.25rem;min-height:2.25rem;" value="great wall" aria-label="Search Wikipedia"><button class="icon trail" aria-label="Clear search">✕</button></div><button class="icon-btn" aria-label="Settings">⚙</button></div>
-    <p class="note" style="margin:0.375rem 0;">Search results — back + Wikipedia search + Settings</p>
-    <div class="nav-top-demo"><div class="search-wrap" style="flex:1;"><svg class="icon lead" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg><input class="input-search is-focus" style="height:2.25rem;min-height:2.25rem;" value="ansible" aria-label="Search your flashcards"><button class="icon trail" aria-label="Clear search">✕</button></div><button class="icon-btn" aria-label="Settings">⚙</button></div>
-    <p class="note" style="margin:0.375rem 0 0;">Flashcards — saved-card search (same anatomy: focus ring + ✕ clear) + Settings</p>
+    <div class="demo-label">nav-top · bar spans the screen, contents share the centered content column · nav + gear pinned to the column's right edge in the identical position on every page · scrollbar gutter reserved so the column never shifts</div>
+    <div class="nav-top-demo"><span class="spacer"></span><span style="color:var(--color-text-primary);font-weight:700;text-decoration:underline;text-underline-offset:5px;">Home</span><span style="color:var(--color-text-secondary);">Flashcards</span><button class="icon-btn" aria-label="Settings">⚙</button></div>
+    <p class="note" style="margin:0.375rem 0;">Home — nav + Settings only, in the shared right-edge position (search is the centered hero, below)</p>
+    <div class="nav-top-demo"><span>←</span><span style="font-family:var(--font-serif);font-weight:700;">Glossary</span><div class="search-wrap" style="flex:1;max-width:340px;"><svg class="icon lead" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg><input class="input-search" style="height:2.25rem;min-height:2.25rem;" value="great wall" aria-label="Search Wikipedia"><button class="icon trail" aria-label="Clear search">✕</button></div><span class="spacer"></span><span style="color:var(--color-text-secondary);">Home</span><span style="color:var(--color-text-primary);font-weight:700;text-decoration:underline;text-underline-offset:5px;">Flashcards</span><button class="icon-btn" aria-label="Settings">⚙</button></div>
+    <p class="note" style="margin:0.375rem 0;">Results, Flashcards, and card detail — ← back (real history) + wordmark + Wikipedia search, same nav + gear on the right. The field mirrors the current results context only; leaving Results empties it. The saved-flashcards search is not in the bar — it sits on the page under the My Flashcards title.</p>
+    <div class="nav-top-demo"><span>←</span><span style="font-family:var(--font-serif);font-weight:700;">Glossary</span><span class="spacer"></span><span style="color:var(--color-text-primary);font-weight:700;text-decoration:underline;text-underline-offset:5px;">Home</span><span style="color:var(--color-text-secondary);">Flashcards</span><button class="icon-btn" aria-label="Settings">⚙</button></div>
+    <p class="note" style="margin:0.375rem 0 0;">Settings / pairing — back + wordmark, no search. On narrow viewports the wordmark drops out (bottom bar carries Home) so the search keeps a usable width.</p>
     <div class="demo-label">nav-bottom · narrow/touch viewports, underlined active item</div>
     <div class="nav-bottom"><a class="is-active" href="#">Home</a><a href="#">Flashcards</a></div>
     <div class="demo-label">book-footer · the signature: progress in the device's voice</div>
@@ -591,7 +618,7 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
     </div>
   </div>
 
-  <p class="note" style="margin-top:var(--space-2xl);">Glossary design system · mirror of docs/design.md · derived from PRD_WikiSearch_MVP.md + raw-design-system.fig only · updated 2026-07-04</p>
+  <p class="note" style="margin-top:var(--space-2xl);">Glossary design system · mirror of docs/design.md · derived from PRD_WikiSearch_MVP.md + raw-design-system.fig only · updated 2026-07-05</p>
 </main>
 
 <script>
