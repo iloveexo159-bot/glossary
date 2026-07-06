@@ -80,6 +80,11 @@ function glossaryApp() {
       this.$watch('exportedFilter', onFilterChange);
       this.$watch('starFilter', onFilterChange);
       this.$watch('mode', () => { this.cardPage = 1; });
+      // modal focus management: one watcher set covers every open/close path,
+      // including the inline `exportSheet = false` handlers in the HTML
+      this.$watch('noteDialog.show', open => this.syncDialogFocus(open));
+      this.$watch('cardDialog.show', open => this.syncDialogFocus(open));
+      this.$watch('exportSheet', open => this.syncDialogFocus(open));
       // lookup lifecycle is otherwise silent to assistive tech
       this.$watch('resultState', s => {
         if (s === 'loading') this.announceLive('Looking up…');
@@ -698,6 +703,47 @@ function glossaryApp() {
         if (h) return { card: c, h };
       }
       return null;
+    },
+
+    /* ---------- modal focus management ---------- */
+    /* aria-modal alone doesn't contain keyboard focus. While any dialog is
+       open the page behind it is inert, Tab wraps inside the dialog (trapTab),
+       and closing restores focus to the control that opened it — unless that
+       control is gone/hidden (e.g. the selection toolbar), in which case focus
+       is left alone rather than thrown to the top of the document. */
+    _dialogOpener: null,
+    focusables(root) {
+      return [...root.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')]
+        .filter(el => !el.disabled && el.getClientRects().length);
+    },
+    trapTab(e) {
+      const list = this.focusables(e.currentTarget);
+      if (!list.length) { e.preventDefault(); return; }
+      const first = list[0], last = list[list.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    },
+    syncDialogFocus(open) {
+      const behind = ['.top-bar', 'main', '.nav-bottom']
+        .map(s => document.querySelector(s)).filter(Boolean);
+      if (open) {
+        this._dialogOpener = document.activeElement;
+        behind.forEach(el => { el.inert = true; });
+        // the open* helpers focus their textarea; this only steps in for
+        // dialogs with no autofocus of their own (the export sheet)
+        this.$nextTick(() => {
+          const dlg = [...document.querySelectorAll('.dialog')].find(d => d.getClientRects().length);
+          if (dlg && !dlg.contains(document.activeElement)) {
+            const first = this.focusables(dlg)[0];
+            if (first) first.focus();
+          }
+        });
+      } else {
+        behind.forEach(el => { el.inert = false; });
+        const opener = this._dialogOpener;
+        this._dialogOpener = null;
+        if (opener && opener.isConnected && opener.getClientRects().length) opener.focus();
+      }
     },
 
     /* ---------- note dialog ---------- */
