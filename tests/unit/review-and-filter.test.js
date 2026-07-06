@@ -31,15 +31,32 @@ test('overview mode sorts newest-saved first', () => {
   assert.deepEqual(Array.from(comp.visibleCards().map((c) => c.id)), ['b', 'c', 'a']);
 });
 
-test('flashcards mode follows the frozen review order, not save order', () => {
+test('both display modes share one order — a card holds its grid position across the toggle', () => {
   const comp = newComp();
   comp.cards = [
     card({ id: 'a', savedAt: 300, lastReviewedAt: 50 }),
     card({ id: 'b', savedAt: 100, lastReviewedAt: null }),
   ];
+  comp.mode = 'overview';
+  const overview = Array.from(comp.visibleCards().map((c) => c.id));
   comp.mode = 'flashcards';
-  comp.reviewOrder = comp.computeReviewOrder(); // ['b','a']
-  assert.deepEqual(Array.from(comp.visibleCards().map((c) => c.id)), ['b', 'a']);
+  const flashcards = Array.from(comp.visibleCards().map((c) => c.id));
+  // newest-saved first in BOTH modes; toggling the view never reshuffles
+  assert.deepEqual(overview, ['a', 'b']);
+  assert.deepEqual(flashcards, overview);
+});
+
+test('startSession orders the deck least-recently-reviewed first, regardless of selection order', () => {
+  const comp = newComp();
+  comp.cards = [
+    card({ id: 'recent', lastReviewedAt: 1000 }),
+    card({ id: 'never', lastReviewedAt: null }),
+    card({ id: 'old', lastReviewedAt: 10 }),
+  ];
+  // selected newest-first (as the grid now presents them); the session still
+  // surfaces neglected terms first: never (null→0), then old, then recent.
+  comp.startSession(['recent', 'never', 'old']);
+  assert.deepEqual(Array.from(comp.session.ids), ['never', 'old', 'recent']);
 });
 
 test('tag filter spans both card-level and highlight-level tags', () => {
@@ -145,6 +162,21 @@ test('shuffleSession keeps the same cards and returns to the first position', ()
   assert.deepEqual(Array.from(comp.session.ids).sort(), ['a', 'b', 'c']);
   assert.equal(comp.session.idx, 0);
   assert.equal(comp.session.flipped, false);
+});
+
+test('selection survives a display-mode toggle in both directions', () => {
+  const comp = newComp();
+  comp.cards = [card({ id: 'a' }), card({ id: 'b' })];
+  comp.mode = 'overview';
+  comp.toggleSelectMode('review');
+  comp.selected = ['a'];
+
+  comp.setMode('flashcards'); // overview → flashcards must NOT drop the pick
+  assert.equal(comp.selectMode, true, 'still in selection mode after switching to flashcards');
+  assert.deepEqual(Array.from(comp.selected), ['a'], 'selection kept switching to flashcards');
+
+  comp.setMode('overview'); // flashcards → overview stays intact too
+  assert.deepEqual(Array.from(comp.selected), ['a'], 'selection kept switching back to overview');
 });
 
 test('selectAllVisible picks the filtered set; clearSelection empties it', () => {

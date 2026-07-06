@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="color-scheme" content="light dark">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com 'unsafe-eval'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' https://upload.wikimedia.org; connect-src https://en.wikipedia.org https://upload.wikimedia.org; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com 'unsafe-eval'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' https://upload.wikimedia.org; connect-src https://en.wikipedia.org https://upload.wikimedia.org https://api.dictionaryapi.dev https://api.datamuse.com; media-src https://api.dictionaryapi.dev; base-uri 'none'; form-action 'none'; object-src 'none'">
 <title>Glossary</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -56,7 +56,7 @@
         <div>
           <template x-for="(s, i) in suggestions" :key="s.title">
             <button class="row" :class="{ active: i === activeSug }" @click="submitSearch(s.title)">
-              <span x-text="s.title"></span>
+              <span class="row-title"><span x-text="s.title"></span><span class="src-tag" x-show="s.source==='dictionary'" x-cloak>Dictionary</span></span>
               <small x-show="s.description" x-text="s.description"></small>
             </button>
           </template>
@@ -101,7 +101,7 @@
         <div class="dropdown" x-show="showDropdown && query.trim().length > 0" x-cloak>
           <template x-for="(s, i) in suggestions" :key="s.title">
             <button class="row" :class="{ active: i === activeSug }" @click="submitSearch(s.title)">
-              <span x-text="s.title"></span>
+              <span class="row-title"><span x-text="s.title"></span><span class="src-tag" x-show="s.source==='dictionary'" x-cloak>Dictionary</span></span>
               <small x-show="s.description" x-text="s.description"></small>
             </button>
           </template>
@@ -142,6 +142,10 @@
 
       <div x-show="resultState==='disambig'">
         <h1 class="page-title" x-text="'“' + lastQuery + '” could mean:'"></h1>
+        <button class="dict-option" x-show="dictOption" x-cloak @click="showDictionaryFor(dictOption)">
+          <span class="src-tag">Dictionary</span>
+          <span>See the definition of “<span x-text="dictOption"></span>”</span>
+        </button>
         <div class="candidates">
           <template x-for="c in candidates" :key="c.title">
             <button class="row" @click="submitSearch(c.title)">
@@ -155,6 +159,7 @@
       <article x-show="resultState==='ok'" x-cloak>
         <div style="display:flex;align-items:flex-start;gap:0.75rem;">
           <h1 class="page-title" style="margin-bottom:0.5rem;" x-text="result?.title"></h1>
+          <span class="badge-source" x-cloak style="margin-top:0.75rem;" x-text="sourceLabel(result?.source)"></span>
           <span class="badge-drift" x-show="resultCard()?.drifted" x-cloak style="margin-top:0.75rem;">Updated on Wikipedia</span>
           <button class="icon-btn bookmark-btn" :class="{ saved: alreadySaved() }" style="margin-left:auto;"
                   @click="toggleSaveIcon('results')"
@@ -165,13 +170,26 @@
         </div>
         <img class="result-img" x-show="result?.image" :src="result?.image" :alt="result?.title"
              :width="result?.imageW" :height="result?.imageH" loading="lazy" decoding="async" x-cloak>
-        <div class="extract" :class="{ collapsed: !expanded && isLong() }"
+        <div class="pronounce" x-show="result?.phonetic || result?.audio" x-cloak>
+          <span class="phonetic" x-show="result?.phonetic" x-text="result?.phonetic"></span>
+          <button class="btn-text" x-show="result?.audio" @click="playAudio(result.audio)" aria-label="Play pronunciation">🔊 Play</button>
+        </div>
+        <div class="extract" :class="{ collapsed: !expanded && isLong(), dict: result?.source==='dictionary' }"
              @mouseup="onTextMouseUp($event, 'results')"
              @keydown="onExtractKeydown($event)"
              @keyup="onTextKeyUp($event, 'results')"
              x-html="resultExtractHtml()"></div>
         <button class="btn-text" x-show="isLong()" @click="expanded = !expanded" x-text="expanded ? 'SHOW LESS' : 'SHOW MORE'" x-cloak></button>
-        <p class="credit">via Wikipedia · text available under CC BY-SA</p>
+        <div class="syn-row" x-show="result?.synonyms?.length" x-cloak>
+          <span class="caption">Synonyms</span>
+          <div class="chip-row">
+            <template x-for="s in (result?.synonyms || [])" :key="s">
+              <button class="chip-tag chip-syn" @click="submitSearch(s)" x-text="s"></button>
+            </template>
+          </div>
+        </div>
+        <p class="credit" x-show="result?.source!=='dictionary'">via Wikipedia · text available under CC BY-SA</p>
+        <p class="credit" x-show="result?.source==='dictionary'" x-cloak>Definitions via Free Dictionary API · synonyms via Datamuse</p>
         <div class="result-actions">
           <button class="btn-primary" x-show="alreadySaved()" x-cloak @click="nav('cards')">View all flashcards</button>
           <span class="muted" style="font-size:var(--type-label-size);"
@@ -294,11 +312,15 @@
              role="button" tabindex="0" :aria-label="'Open ' + c.title"
              @keydown.enter.prevent="cardClick(c)" @keydown.space.prevent="cardClick(c)">
           <span class="select-check" x-show="selectMode" x-text="selected.includes(c.id) ? '✓' : ''" x-cloak></span>
-          <button class="icon-btn star-btn" :class="{ starred: c.starred }" @click.stop="toggleStar(c.id)"
-                  :aria-pressed="!!c.starred" :aria-label="(c.starred ? 'Unstar ' : 'Star ') + c.title"
-                  x-text="c.starred ? '★' : '☆'"></button>
-          <div class="badges"><span class="badge-drift" x-show="c.drifted" x-cloak>Updated on Wikipedia</span></div>
-          <div class="term" x-text="c.title"></div>
+          <!-- title + star share one centered row: the title flexes and wraps,
+               so a long term breaks to a new line instead of running under the star -->
+          <div class="card-head">
+            <div class="term" x-text="c.title"></div>
+            <button class="icon-btn star-btn" :class="{ starred: c.starred }" @click.stop="toggleStar(c.id)"
+                    :aria-pressed="!!c.starred" :aria-label="(c.starred ? 'Unstar ' : 'Star ') + c.title"
+                    x-text="c.starred ? '★' : '☆'"></button>
+          </div>
+          <div class="badges" x-show="c.drifted" x-cloak><span class="badge-drift">Updated on Wikipedia</span></div>
           <div class="date caption" x-text="cardMeta(c)"></div>
           <div class="summary" x-text="c.extract"></div>
           <div class="chip-row">
@@ -313,7 +335,10 @@
     <div class="cards-grid" x-show="mode==='flashcards'" x-cloak>
       <template x-for="c in pagedCards()" :key="c.id">
         <div class="review-card" :class="{ flipped: flipped[c.id], selected: selected.includes(c.id) }">
-          <span class="select-check" x-show="selectMode" x-text="selected.includes(c.id) ? '✓' : ''" x-cloak></span>
+          <!-- the checkbox sits outside .flip-area (the only other click target),
+               so it needs its own handler or it's a dead zone in select mode -->
+          <span class="select-check" x-show="selectMode" @click.stop="cardClick(c)"
+                x-text="selected.includes(c.id) ? '✓' : ''" x-cloak></span>
           <button class="icon-btn star-btn" :class="{ starred: c.starred }" @click.stop="toggleStar(c.id)"
                   :aria-pressed="!!c.starred" :aria-label="(c.starred ? 'Unstar ' : 'Star ') + c.title"
                   x-text="c.starred ? '★' : '☆'"></button>
@@ -411,6 +436,7 @@
       <div class="reading-col">
         <div style="display:flex;align-items:flex-start;gap:0.75rem;">
           <h1 class="page-title" style="margin-bottom:0.5rem;" x-text="currentCard().title"></h1>
+          <span class="badge-source" x-cloak style="margin-top:0.75rem;" x-text="sourceLabel(currentCard().source)"></span>
           <span class="badge-drift" x-show="currentCard().drifted" x-cloak style="margin-top:0.75rem;">Updated on Wikipedia</span>
           <button class="icon-btn bookmark-btn saved" style="margin-left:auto;"
                   @click="toggleSaveIcon('detail')" aria-label="Edit note and tags" aria-pressed="true">
@@ -425,11 +451,24 @@
 
         <img class="result-img" x-show="currentCard().image" :src="currentCard().image" :alt="currentCard().title"
              :width="currentCard().imageW" :height="currentCard().imageH" loading="lazy" decoding="async" x-cloak>
-        <div class="extract" @mouseup="onTextMouseUp($event, 'detail')"
+        <div class="pronounce" x-show="currentCard().phonetic || currentCard().audio" x-cloak>
+          <span class="phonetic" x-show="currentCard().phonetic" x-text="currentCard().phonetic"></span>
+          <button class="btn-text" x-show="currentCard().audio" @click="playAudio(currentCard().audio)" aria-label="Play pronunciation">🔊 Play</button>
+        </div>
+        <div class="extract" :class="{ dict: currentCard().source==='dictionary' }" @mouseup="onTextMouseUp($event, 'detail')"
              @keydown="onExtractKeydown($event)"
              @keyup="onTextKeyUp($event, 'detail')"
              x-html="detailExtractHtml()"></div>
-        <p class="credit">via Wikipedia · text available under CC BY-SA · saved copy — never updates on its own</p>
+        <div class="syn-row" x-show="currentCard().synonyms?.length" x-cloak>
+          <span class="caption">Synonyms</span>
+          <div class="chip-row">
+            <template x-for="s in (currentCard().synonyms || [])" :key="s">
+              <button class="chip-tag chip-syn" @click="submitSearch(s)" x-text="s"></button>
+            </template>
+          </div>
+        </div>
+        <p class="credit" x-show="currentCard().source!=='dictionary'">via Wikipedia · text available under CC BY-SA · saved copy — never updates on its own</p>
+        <p class="credit" x-show="currentCard().source==='dictionary'" x-cloak>Definitions via Free Dictionary API · synonyms via Datamuse · saved copy — never updates on its own</p>
 
         <h2 class="heading">Highlights &amp; notes</h2>
         <div class="hl-item" x-show="currentCard().note || currentCard().tags.length">

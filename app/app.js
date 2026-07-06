@@ -38,10 +38,11 @@ function glossaryApp() {
     suggestions: [], sugLoading: false, showDropdown: false, activeSug: -1,
     recent: [],
     result: null, resultState: 'idle', candidates: [], expanded: false,
+    dictOption: null, // exact-word dictionary hit offered on a disambiguation page
     cards: [], mode: 'overview', cardSearch: '',
     tagFilters: [], reviewedFilter: 'all', exportedFilter: 'all', starFilter: false,
     cardPage: 1, cardPageSize: 12,
-    selectMode: false, selectIntent: 'review', selected: [], flipped: {}, reviewOrder: [],
+    selectMode: false, selectIntent: 'review', selected: [], flipped: {},
     // focused review session (#/review) — survives detours to a card's detail page
     session: { ids: [], idx: 0, flipped: false, done: false },
     _histStack: [], _lastHash: '', _backNav: false,
@@ -119,8 +120,6 @@ function glossaryApp() {
         else this.nav('cards');
       } else if (['home', 'cards', 'settings', 'pairing'].includes(p)) {
         this.page = p;
-        // re-entering the collection page refreshes the frozen flip-deck order
-        if (p === 'cards' && this.mode === 'flashcards') this.reviewOrder = this.computeReviewOrder();
         if (p === 'home') this.$nextTick(() => this.focusSearch());
       } else {
         this.page = 'home';
@@ -185,9 +184,29 @@ function glossaryApp() {
         const res = await fetch(url);
         const data = await res.json();
         if (this.query.trim() !== q) return; // stale response
-        this.suggestions = (data[1] || []).map((title, i) => ({ title, description: (data[2] || [])[i] || '' }));
+        const wiki = (data[1] || []).map((title, i) => ({ title, description: (data[2] || [])[i] || '', source: 'wikipedia' }));
+        this.suggestions = wiki;
+        this.probeDictionarySuggestion(q, wiki); // async; appends a Dictionary row if warranted
       } catch { this.suggestions = []; }
       finally { this.sugLoading = false; }
+    },
+    /* dictionaryapi.dev has no prefix search — only exact lookups — so we probe
+       the exact typed word and surface it as a tagged suggestion ONLY when
+       Wikipedia has no exact title match. That's precisely the "ignominy" case
+       where the dictionary is the thing that rescues a dead-end search. */
+    async probeDictionarySuggestion(q, wiki) {
+      if (q.length < 3) return;
+      if (wiki.some(w => w.title.toLowerCase() === q.toLowerCase())) return;
+      try {
+        const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(q)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!Array.isArray(data) || !data.length) return;
+        if (this.query.trim() !== q) return; // a newer keystroke moved on
+        if (this.suggestions.some(s => s.title.toLowerCase() === data[0].word.toLowerCase())) return;
+        const pos = data[0].meanings?.[0]?.partOfSpeech || 'definition';
+        this.suggestions = [...this.suggestions, { title: data[0].word, description: pos, source: 'dictionary' }];
+      } catch { /* offline or rate-limited — the dropdown simply omits the row */ }
     },
     moveSug(delta) {
       if (!this.suggestions.length) return;
@@ -228,17 +247,25 @@ function glossaryApp() {
     async lookup(term) {
       this.lastQuery = term;
       this.resultState = 'loading';
-      this.result = null; this.candidates = []; this.expanded = false;
+      this.result = null; this.candidates = []; this.expanded = false; this.dictOption = null;
       const cache = lsGet(LS.cache, {});
       try {
         const url = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(term.replace(/ /g, '_'))}?redirect=true`;
         const res = await fetch(url, { headers: WIKI_HEADERS });
-        if (res.status === 404) { this.resultState = 'error'; return; }
+        // Wikipedia has no article — fall through to the dictionary rather than
+        // dead-ending. This is the ONLY thing that differs by source: everything
+        // downstream (highlight, review, export) treats both the same.
+        if (res.status === 404) { await this.fetchDictionary(term); return; }
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const data = await res.json();
         if (data.type === 'disambiguation') {
+          // A disambiguation stub is "no useful single article" — the same
+          // dead-end the dictionary rescues. Keep Wikipedia's candidates, but
+          // offer the dictionary definition alongside them (e.g. "ignominy",
+          // whose disambiguation lists only obscure works by that name).
           this.resultState = 'disambig';
           await this.fetchCandidates(term);
+          this.probeDictionaryOption(term);
           return;
         }
         this.result = {
@@ -250,6 +277,10 @@ function glossaryApp() {
           imageW: data.thumbnail ? data.thumbnail.width || null : null,
           imageH: data.thumbnail ? data.thumbnail.height || null : null,
           revision: data.revision || null,
+          source: 'wikipedia',
+          // fields the dictionary path also populates — kept present (empty) on
+          // Wikipedia results so the card schema is uniform across both sources
+          phonetic: '', audio: null, synonyms: [],
         };
         this.resultState = 'ok';
         this.pushRecent(data.title); // only successful lookups, canonical title (QA bug 7)
@@ -275,6 +306,88 @@ function glossaryApp() {
           .map((title, i) => ({ title, description: (data[2] || [])[i] || '' }));
       } catch { this.candidates = []; }
     },
+    /* Does the dictionary have this exact word? If so, surface a banner on the
+       disambiguation page. Guarded against staleness so a slow probe can't
+       attach an option to a page the reader has already navigated past. */
+    async probeDictionaryOption(term) {
+      try {
+        const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(term)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!Array.isArray(data) || !data.length) return;
+        if (this.lastQuery === term && this.resultState === 'disambig') this.dictOption = data[0].word;
+      } catch { /* no dictionary entry offered — candidates stand on their own */ }
+    },
+    /* Reader chose the dictionary definition over the disambiguation candidates */
+    showDictionaryFor(term) {
+      this.dictOption = null;
+      this.resultState = 'loading';
+      this.fetchDictionary(term);
+    },
+    /* ---------- dictionary fallback (Wikipedia 404) ----------
+       Primary: dictionaryapi.dev (definitions, phonetic, audio) — keyless & CORS.
+       Companion: Datamuse `ml=` for synonyms, since dictionaryapi's own synonym
+       arrays come back empty for exactly the uncommon words that miss Wikipedia.
+       Both are fired in parallel; a Datamuse failure never blocks a definition. */
+    async fetchDictionary(term) {
+      const cache = lsGet(LS.cache, {});
+      try {
+        const [defRes, synData] = await Promise.all([
+          fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(term)}`),
+          fetch(`https://api.datamuse.com/words?ml=${encodeURIComponent(term)}&max=8`)
+            .then(r => r.ok ? r.json() : []).catch(() => []),
+        ]);
+        // Staleness first: a newer lookup superseded this one, so return before
+        // touching resultState — otherwise a slow/failed response for an
+        // abandoned term clobbers the state of the term now on screen.
+        if (this.lastQuery !== term) return;
+        // A miss returns a JSON *object* {title,message}, not an array — branch
+        // on Array.isArray rather than trusting res.ok alone.
+        const defData = defRes.ok ? await defRes.json() : null;
+        if (!Array.isArray(defData) || !defData.length) { this.resultState = 'error'; return; }
+        this.result = this.buildDictionaryResult(defData[0], synData);
+        this.resultState = 'ok';
+        this.pushRecent(this.result.title);
+        // no checkDrift: dictionary entries have no Wikipedia revision to track
+        const key = this.result.title.toLowerCase();
+        cache[key] = { ...this.result, ts: Date.now() };
+        cache[term.toLowerCase()] = cache[key];
+        const keys = Object.keys(cache);
+        if (keys.length > 60) delete cache[keys[0]];
+        lsSet(LS.cache, cache);
+      } catch {
+        if (this.lastQuery !== term) return; // abandoned lookup — leave current state alone
+        const hit = cache[term.toLowerCase()];
+        if (hit) { this.result = hit; this.resultState = 'ok'; this.pushRecent(hit.title); }
+        else this.resultState = navigator.onLine ? 'error' : 'offline';
+      }
+    },
+    /* Fuller definition: one line per part of speech (first sense of each),
+       joined by newlines and rendered with white-space:pre-line so senses stack
+       without any HTML — keeping the extract a plain string the highlight
+       offsets can index exactly as they do a Wikipedia paragraph. */
+    buildDictionaryResult(entry, synData) {
+      const senses = (entry.meanings || []).map(m => {
+        const def = m.definitions?.[0]?.definition || '';
+        return m.partOfSpeech ? `${m.partOfSpeech}. ${def}` : def;
+      }).filter(s => s.trim());
+      const ph = entry.phonetics || [];
+      // audio is frequently "" even when a phonetics entry exists — take the
+      // first non-empty one, and render the play control only when it's present
+      const audio = (ph.find(p => p.audio) || {}).audio || null;
+      const phonetic = entry.phonetic || (ph.find(p => p.text) || {}).text || '';
+      const dictSyns = (entry.meanings || []).flatMap(m => m.synonyms || []);
+      const dmSyns = Array.isArray(synData) ? synData.map(r => r.word) : [];
+      const synonyms = [...new Set([...dmSyns, ...dictSyns])].slice(0, 8);
+      return {
+        title: entry.word,
+        extract: senses.join('\n') || '(No definition available.)',
+        image: null, imageW: null, imageH: null, revision: null,
+        source: 'dictionary', phonetic, audio, synonyms,
+      };
+    },
+    playAudio(url) { if (url) { try { new Audio(url).play().catch(() => {}); } catch { /* no-op */ } } },
+    sourceLabel(source) { return source === 'dictionary' ? 'Dictionary' : 'Wikipedia'; },
     isLong() { return (this.result?.extract || '').length > 700; },
 
     /* ---------- flashcards ---------- */
@@ -293,6 +406,12 @@ function glossaryApp() {
         imageW: this.result.imageW || null,
         imageH: this.result.imageH || null,
         revision: this.result.revision,
+        // source is the only field distinguishing the two kinds of card;
+        // pre-Firebase cards without it are treated as 'wikipedia' at read time
+        source: this.result.source || 'wikipedia',
+        phonetic: this.result.phonetic || '',
+        audio: this.result.audio || null,
+        synonyms: this.result.synonyms || [],
         savedAt: Date.now(),
         lastReviewedAt: null,
         lastExportedAt: null,
@@ -382,6 +501,8 @@ function glossaryApp() {
        without touching the summary we actually saved. */
     checkDrift(card, live) {
       if (!card || !live || !live.extract) return;
+      // dictionary cards have no Wikipedia article to drift against — leave them
+      if ((card.source || 'wikipedia') === 'dictionary') return;
       const changed = live.extract !== card.extract || (live.image || null) !== (card.image || null);
       if (changed) {
         card.drifted = true;
@@ -428,8 +549,11 @@ function glossaryApp() {
         .map(c => c.id);
     },
     setMode(m) {
+      // Switching display mode only resets flip state (which is per-view). An
+      // in-progress selection carries across the toggle — a card picked in
+      // Overview stays picked in Flashcards and vice versa, now that the
+      // flashcard checkbox is itself clickable.
       this.mode = m; this.flipped = {};
-      if (m === 'flashcards') { this.selectMode = false; this.selected = []; this.reviewOrder = this.computeReviewOrder(); }
     },
     /* Two entry points, one selection mode: "Start Review" and "Export" both
        open selection with their own intent — each intent exposes exactly one
@@ -463,7 +587,12 @@ function glossaryApp() {
 
     /* ---------- focused review session ---------- */
     startSession(ids) {
-      const valid = ids.filter(id => this.cards.some(c => c.id === id));
+      // PRD: a review deck surfaces neglected terms first (least-recently-
+      // reviewed), regardless of the order they were selected in or which
+      // collection view they came from. computeReviewOrder ranks all cards;
+      // we keep just the selected ones, preserving that ranking.
+      const want = new Set(ids);
+      const valid = this.computeReviewOrder().filter(id => want.has(id));
       if (!valid.length) return;
       this.session = { ids: valid, idx: 0, flipped: false, done: false };
       this.selectMode = false; this.selectIntent = 'review'; this.selected = [];
@@ -530,15 +659,11 @@ function glossaryApp() {
       if (this.starFilter) list = list.filter(c => !!c.starred);
       const q = this.cardSearch.trim().toLowerCase();
       if (q) list = list.filter(c => (c.title || '').toLowerCase().includes(q) || (c.extract || '').toLowerCase().includes(q));
-      if (this.mode === 'flashcards') {
-        const order = this.reviewOrder;
-        list.sort((a, b) => {
-          const ia = order.indexOf(a.id), ib = order.indexOf(b.id);
-          return (ia < 0 ? Number.MAX_SAFE_INTEGER : ia) - (ib < 0 ? Number.MAX_SAFE_INTEGER : ib);
-        });
-      } else {
-        list.sort((a, b) => b.savedAt - a.savedAt);
-      }
+      // One order for both display modes — a card sits in the same grid position
+      // whether you're in Overview or Flashcards. The least-recently-reviewed
+      // ordering that revision needs lives on the review *session* (startSession),
+      // not on the browsing grid, so toggling the view never shuffles the cards.
+      list.sort((a, b) => b.savedAt - a.savedAt);
       return list;
     },
     cardTags(c) {

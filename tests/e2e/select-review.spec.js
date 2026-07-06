@@ -70,6 +70,25 @@ test('View full article detours to detail; back resumes the session in place', a
   await expect(page.locator('.session-controls')).toContainText('1 / 2');
 });
 
+test('flashcards-mode select box is clickable (regression: checkbox was a dead zone)', async ({ page }) => {
+  await openApp(page, { seed: [
+    seedCard({ id: 'a', title: 'Atom' }),
+    seedCard({ id: 'b', title: 'Cell' }),
+  ] });
+  await hashTo(page, '#/cards');
+  await page.getByRole('button', { name: 'Flashcards', exact: true }).click();
+
+  // enter selection mode — the checkbox appears on each flip card
+  await page.getByRole('button', { name: 'Review', exact: true }).click();
+  const firstCard = page.locator('.review-card').first();
+
+  // clicking the checkbox ITSELF must select the card. It sits outside .flip-area
+  // (the only other click target), so a missing handler makes it a dead zone.
+  await firstCard.locator('.select-check').click();
+  await expect(firstCard).toHaveClass(/selected/);
+  await expect(page.getByRole('button', { name: 'Review (1)', exact: true })).toBeVisible();
+});
+
 test('segmented status filter separates reviewed from unreviewed cards', async ({ page }) => {
   await openApp(page, { seed: [
     seedCard({ id: 'r', title: 'Atom', lastReviewedAt: Date.now() }),
@@ -102,9 +121,12 @@ test('multiple tag chips select together (OR)', async ({ page }) => {
 });
 
 test('flashcard search shows a clear (X) button that resets the filter', async ({ page }) => {
+  // distinct extracts: the default seedCard extract mentions "atom", which would
+  // make a title search for "Atom" also match Cell via its body text (search
+  // spans title OR extract) — give each card its own body so the query is unambiguous
   await openApp(page, { seed: [
-    seedCard({ id: 'a', title: 'Atom' }),
-    seedCard({ id: 'b', title: 'Cell' }),
+    seedCard({ id: 'a', title: 'Atom', extract: 'The smallest unit of ordinary matter.' }),
+    seedCard({ id: 'b', title: 'Cell', extract: 'The basic structural unit of living organisms.' }),
   ] });
   await hashTo(page, '#/cards');
 

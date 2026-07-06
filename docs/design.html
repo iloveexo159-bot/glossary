@@ -337,6 +337,27 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
   letter-spacing: var(--type-caption-ls); text-transform: uppercase;
   color: var(--color-text-muted); border: 1px solid var(--color-border-strong); border-radius: var(--rounded-full);
 }
+.badge-source, .src-tag {
+  display: inline-flex; align-items: center; padding: 0.25rem 0.625rem;
+  font-family: var(--font-sans); font-size: var(--type-caption-size); font-weight: 700;
+  letter-spacing: var(--type-caption-ls); text-transform: uppercase;
+  color: var(--color-text-muted); border: 1px solid var(--color-border); border-radius: var(--rounded-full);
+}
+.src-tag { padding: 0.0625rem 0.5rem; }
+.pronounce { display: inline-flex; align-items: center; gap: var(--space-base); }
+.pronounce .phonetic { font-family: var(--font-serif); font-size: var(--type-ui-size); color: var(--color-text-secondary); }
+.syn-chip {
+  display: inline-flex; align-items: center; padding: 0.1875rem 0.625rem; cursor: pointer;
+  font-family: var(--font-sans); font-size: var(--type-label-size); font-weight: 600;
+  color: var(--color-text-secondary); background: transparent;
+  border: 1px solid var(--color-border); border-radius: var(--rounded-full);
+}
+.dict-option {
+  display: flex; align-items: center; gap: var(--space-base); width: 100%; text-align: left;
+  padding: var(--space-base); font-family: var(--font-sans); font-size: var(--type-ui-size); font-weight: 600;
+  color: var(--color-text-primary); background: var(--color-surface);
+  border: 1px solid var(--color-border-strong); border-radius: var(--rounded-md);
+}
 .toast {
   display: inline-flex; align-items: center; gap: var(--space-sm); padding: 0.75rem 1.25rem;
   background: var(--color-text-primary); color: var(--color-background);
@@ -614,6 +635,13 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
     </div>
     <div class="demo-label">badge-drift · passive "updated on Wikipedia" indicator · detail adds a reader-controlled update action</div>
     <div class="demo-row"><span class="badge-drift">◌ Updated on Wikipedia</span><button class="btn-text">UPDATE SAVED COPY</button></div>
+    <div class="demo-label">badge-source · provenance pill on Results + Detail (absent from the Collection grid) · src-tag marks a dictionary hit in the suggestions dropdown</div>
+    <div class="demo-row"><span class="badge-source">Wikipedia</span><span class="badge-source">Dictionary</span><span class="src-tag">Dictionary</span></div>
+    <div class="demo-label">dictionary result affordances · IPA + play (audio only when the API returns it), and tappable synonym chips that each launch a fresh lookup</div>
+    <div class="demo-row"><span class="pronounce"><span class="phonetic">/ˈɪɡnəˌmɪni/</span><button class="btn-text">🔊 Play</button></span></div>
+    <div class="demo-row"><span class="syn-chip">disgrace</span><span class="syn-chip">shame</span><span class="syn-chip">scandal</span></div>
+    <div class="demo-label">dict-option · the dictionary offered above Wikipedia's candidates on a disambiguation page</div>
+    <div class="demo-row"><button class="dict-option"><span class="src-tag">Dictionary</span><span>See the definition of "ignominy"</span></button></div>
     <div class="demo-label">toast · save confirmation, bottom-center, auto-dismisses</div>
     <div class="demo-row"><span class="toast">✓ Saved to flashcards</span></div>
   </div>

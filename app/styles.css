@@ -328,9 +328,13 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
   margin-bottom: var(--space-md);
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
 }
-/* badges sit left of the corner star toggle; the term clears the star column */
-.flashcard .badges { position: absolute; top: 0.625rem; right: 3rem; display: flex; gap: 0.25rem; }
-.flashcard .term { padding-right: 2.5rem; }
+/* title + star share one centered row; the title flexes and wraps so it never
+   runs under the star, and align-items:center keeps the star middle-aligned
+   with the title (single- or multi-line) */
+.flashcard .card-head { display: flex; align-items: center; gap: var(--space-sm); margin-bottom: var(--space-xs); }
+.flashcard .card-head .term { flex: 1 1 auto; min-width: 0; margin-bottom: 0; overflow-wrap: anywhere; }
+.flashcard .card-head .star-btn { position: static; flex: 0 0 auto; }
+.flashcard .badges { margin-bottom: var(--space-xs); }
 /* ---------- Flip cards (Flashcards mode + review session) ----------
    The card is a column: a 3D flip area on top, a stable labeled footer strip
    below (the footer never rotates — it is the "view article" affordance).
@@ -504,12 +508,48 @@ input[type="range"] { accent-color: var(--color-text-primary); width: min(240px,
   letter-spacing: var(--type-caption-ls); text-transform: uppercase;
   color: var(--color-text-muted); border: 1px solid var(--color-border-strong); border-radius: var(--rounded-full);
 }
+/* Source provenance — the only visible marker distinguishing the two card
+   kinds. Same monochrome pill as the drift badge, no accent color spent. */
+.badge-source {
+  display: inline-flex; align-items: center; padding: 0.25rem 0.625rem;
+  font-family: var(--font-sans); font-size: var(--type-caption-size); font-weight: 700;
+  letter-spacing: var(--type-caption-ls); text-transform: uppercase;
+  color: var(--color-text-muted); border: 1px solid var(--color-border); border-radius: var(--rounded-full);
+}
+/* Compact source tag inside the suggestions dropdown row */
+.dropdown .row .row-title { display: flex; align-items: center; gap: 0.5rem; }
+.src-tag {
+  font-family: var(--font-sans); font-size: var(--type-caption-size); font-weight: 700;
+  letter-spacing: var(--type-caption-ls); text-transform: uppercase;
+  color: var(--color-text-muted); border: 1px solid var(--color-border); border-radius: var(--rounded-full);
+  padding: 0.0625rem 0.5rem;
+}
+/* Pronunciation line: IPA in reading serif, play control as a text button */
+.pronounce { display: flex; align-items: center; gap: var(--space-base); margin-bottom: var(--space-sm); }
+.phonetic { font-family: var(--font-serif); font-size: var(--type-ui-size); color: var(--color-text-secondary); }
+/* Synonyms — reuse the tag chip; clickable to search the synonym in turn */
+.syn-row { margin-top: var(--space-base); display: flex; flex-direction: column; gap: var(--space-sm); }
+.syn-row .chip-row { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
+.chip-syn { cursor: pointer; }
+.chip-syn:hover { color: var(--color-text-primary); border-color: var(--color-border-strong); }
+/* Dictionary definitions stack one sense per line; the newline chars live in
+   the extract string so highlight offsets stay exact (see renderExtract). */
+.extract.dict { white-space: pre-line; }
+/* Dictionary offer on a disambiguation page — a full-width actionable row */
+.dict-option {
+  display: flex; align-items: center; gap: var(--space-base); width: 100%; text-align: left;
+  padding: var(--space-base); margin-bottom: var(--space-base); cursor: pointer;
+  font-family: var(--font-sans); font-size: var(--type-ui-size); font-weight: 600;
+  color: var(--color-text-primary); background: var(--color-surface);
+  border: 1px solid var(--color-border-strong); border-radius: var(--rounded-md);
+}
+.dict-option:hover { background: var(--color-background); }
 .select-check {
   position: absolute; top: 0.625rem; left: 0.625rem;
   width: 1.125rem; height: 1.125rem; border: 2px solid var(--color-border-strong);
   border-radius: var(--rounded-sm); background: var(--color-surface);
   display: flex; align-items: center; justify-content: center;
-  font-size: 0.75rem; font-weight: 700; color: var(--color-background);
+  font-size: 0.75rem; font-weight: 700; color: var(--color-background); cursor: pointer;
 }
 .flashcard.selected .select-check, .review-card.selected .select-check { background: var(--color-text-primary); border-color: var(--color-text-primary); }
 .review-card.selected { outline: 2px solid var(--color-text-primary); outline-offset: 1px; }

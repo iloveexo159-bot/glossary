@@ -1,0 +1,120 @@
+/* Dictionary fallback (Wikipedia 404 / disambiguation) — the definition/
+   phonetic/audio/synonym shaping (buildDictionaryResult), the fetch guards that
+   were subtle to get right, and the invariant that "source" is the ONLY thing
+   distinguishing a dictionary card (drift is skipped, everything else is shared). */
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const { newComp } = require('./helpers/load-app');
+
+/* A dictionaryapi.dev entry, overridable per test. */
+const entry = (over = {}) => ({
+  word: 'ignominy',
+  phonetic: '/ˈɪɡnəˌmɪni/',
+  phonetics: [{ text: '/ˈɪɡnəˌmɪni/', audio: '' }],
+  meanings: [{ partOfSpeech: 'noun', definitions: [{ definition: 'Great dishonor.' }], synonyms: [] }],
+  ...over,
+});
+
+test('buildDictionaryResult composes one line per part of speech (the "fuller" format)', () => {
+  const comp = newComp();
+  const r = comp.buildDictionaryResult(entry({
+    meanings: [
+      { partOfSpeech: 'noun', definitions: [{ definition: 'A jog.' }] },
+      { partOfSpeech: 'verb', definitions: [{ definition: 'To move fast.' }] },
+    ],
+  }), []);
+  // newline-joined so white-space:pre-line stacks the senses; the chars stay in
+  // the string so highlight offsets index it exactly like a Wikipedia paragraph
+  assert.equal(r.extract, 'noun. A jog.\nverb. To move fast.');
+  assert.equal(r.source, 'dictionary');
+  assert.equal(r.image, null);
+});
+
+test('buildDictionaryResult falls back to a placeholder when there are no definitions', () => {
+  const comp = newComp();
+  const r = comp.buildDictionaryResult({ word: 'x', meanings: [], phonetics: [] }, []);
+  assert.equal(r.extract, '(No definition available.)');
+});
+
+test('buildDictionaryResult takes the first non-empty audio, else null', () => {
+  const comp = newComp();
+  const none = comp.buildDictionaryResult(entry({ phonetics: [{ text: '/x/', audio: '' }] }), []);
+  assert.equal(none.audio, null, 'all-empty audio collapses to null (button stays hidden)');
+  const some = comp.buildDictionaryResult(entry({ phonetics: [{ audio: '' }, { audio: 'https://a/x.mp3' }] }), []);
+  assert.equal(some.audio, 'https://a/x.mp3');
+});
+
+test('buildDictionaryResult uses entry.phonetic, falling back to a phonetics[].text', () => {
+  const comp = newComp();
+  const r = comp.buildDictionaryResult(entry({ phonetic: '', phonetics: [{ text: '/fallback/', audio: '' }] }), []);
+  assert.equal(r.phonetic, '/fallback/');
+});
+
+test('buildDictionaryResult merges Datamuse + dictionary synonyms, deduped and capped at 8', () => {
+  const comp = newComp();
+  const r = comp.buildDictionaryResult(entry({
+    meanings: [{ partOfSpeech: 'noun', definitions: [{ definition: 'x' }], synonyms: ['shame', 'disgrace'] }],
+  }), [{ word: 'disgrace' }, { word: 'scandal' }]);
+  // Datamuse results lead; the dictionary's own synonyms follow; 'disgrace' dedupes
+  assert.deepEqual(Array.from(r.synonyms), ['disgrace', 'scandal', 'shame']);
+});
+
+test('buildDictionaryResult caps the synonym list at 8', () => {
+  const comp = newComp();
+  const many = Array.from({ length: 20 }, (_, i) => ({ word: 'w' + i }));
+  const r = comp.buildDictionaryResult(entry(), many);
+  assert.equal(r.synonyms.length, 8);
+});
+
+test('fetchDictionary treats a non-array (404 {title,message}) payload as no result', async () => {
+  const comp = newComp();
+  comp.lastQuery = 'zzzznotaword';
+  comp._ctx.fetch = async (url) => String(url).includes('dictionaryapi')
+    ? { ok: true, json: async () => ({ title: 'No Definitions Found' }) } // object, not array
+    : { ok: true, json: async () => [] };
+  await comp.fetchDictionary('zzzznotaword');
+  assert.equal(comp.resultState, 'error');
+  assert.equal(comp.result, null);
+});
+
+test('fetchDictionary ignores a stale response after the reader has moved on', async () => {
+  const comp = newComp();
+  comp.lastQuery = 'newterm';      // a newer lookup already superseded this one
+  comp.resultState = 'loading';
+  comp._ctx.fetch = async (url) => String(url).includes('dictionaryapi')
+    ? { ok: true, json: async () => [entry({ word: 'oldterm' })] }
+    : { ok: true, json: async () => [] };
+  await comp.fetchDictionary('oldterm');
+  assert.equal(comp.result, null, 'a stale definition must not clobber the current term');
+});
+
+test('fetchDictionary populates the result on a live hit and marks the source', async () => {
+  const comp = newComp();
+  comp.lastQuery = 'ignominy';
+  comp.resultState = 'loading';
+  comp._ctx.fetch = async (url) => String(url).includes('dictionaryapi')
+    ? { ok: true, json: async () => [entry()] }
+    : { ok: true, json: async () => [{ word: 'shame' }] };
+  await comp.fetchDictionary('ignominy');
+  assert.equal(comp.resultState, 'ok');
+  assert.equal(comp.result.source, 'dictionary');
+  assert.equal(comp.result.title, 'ignominy');
+  assert.deepEqual(Array.from(comp.result.synonyms), ['shame']);
+});
+
+test('a dictionary-sourced card never drifts — there is no Wikipedia article to compare', () => {
+  const comp = newComp();
+  const c = { id: 'd', title: 'ignominy', source: 'dictionary', extract: 'noun. Shame.', image: null, highlights: [], drifted: false };
+  comp.cards = [c];
+  // even when the "live" text differs wildly, a dictionary card stays undrifted
+  comp.checkDrift(c, { extract: 'noun. SOMETHING ELSE ENTIRELY.', image: null });
+  assert.equal(c.drifted, false);
+  assert.equal(c.pendingUpdate, undefined);
+});
+
+test('sourceLabel maps the source to a human label, defaulting to Wikipedia', () => {
+  const comp = newComp();
+  assert.equal(comp.sourceLabel('dictionary'), 'Dictionary');
+  assert.equal(comp.sourceLabel('wikipedia'), 'Wikipedia');
+  assert.equal(comp.sourceLabel(undefined), 'Wikipedia', 'pre-source cards read as Wikipedia');
+});
