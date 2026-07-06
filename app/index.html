@@ -166,6 +166,8 @@
         <img class="result-img" x-show="result?.image" :src="result?.image" :alt="result?.title" x-cloak>
         <div class="extract" :class="{ collapsed: !expanded && isLong() }"
              @mouseup="onTextMouseUp($event, 'results')"
+             @keydown="onExtractKeydown($event)"
+             @keyup="onTextKeyUp($event, 'results')"
              x-html="resultExtractHtml()"></div>
         <button class="btn-text" x-show="isLong()" @click="expanded = !expanded" x-text="expanded ? 'SHOW LESS' : 'SHOW MORE'" x-cloak></button>
         <p class="credit">via Wikipedia · text available under CC BY-SA</p>
@@ -419,7 +421,10 @@
         </div>
 
         <img class="result-img" x-show="currentCard().image" :src="currentCard().image" :alt="currentCard().title" x-cloak>
-        <div class="extract" @mouseup="onTextMouseUp($event, 'detail')" x-html="detailExtractHtml()"></div>
+        <div class="extract" @mouseup="onTextMouseUp($event, 'detail')"
+             @keydown="onExtractKeydown($event)"
+             @keyup="onTextKeyUp($event, 'detail')"
+             x-html="detailExtractHtml()"></div>
         <p class="credit">via Wikipedia · text available under CC BY-SA · saved copy — never updates on its own</p>
 
         <h2 class="heading">Highlights &amp; notes</h2>
@@ -533,7 +538,8 @@
 </nav>
 
 <!-- ============ SELECTION TOOLBAR ============ -->
-<div class="sel-toolbar" x-show="toolbar.show" :style="'left:' + toolbar.x + 'px; top:' + toolbar.y + 'px;'" x-cloak @click.stop>
+<div class="sel-toolbar" role="toolbar" aria-label="Highlight actions"
+     x-show="toolbar.show" :style="'left:' + toolbar.x + 'px; top:' + toolbar.y + 'px;'" x-cloak @click.stop>
   <button @click="confirmHighlight(false)" x-text="toolbar.context === 'results' ? 'Highlight & save' : 'Highlight'"></button>
   <button @click="confirmHighlight(true)">Note</button>
 </div>

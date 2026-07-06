@@ -641,10 +641,28 @@ function glossaryApp() {
       // click on an existing highlight/marker opens its note
       const hlEl = e.target.closest && e.target.closest('[data-hl]');
       if (hlEl) { this.openNoteDialog(hlEl.dataset.hl); return; }
+      this.showToolbarForSelection(e.currentTarget, context);
+    },
+    /* Keyboard twin of the mouseup path: rendered marks are role="button" via
+       x-html, so no Alpine directive can sit on them — the container catches
+       Enter/Space and opens the note the mark promises. */
+    onExtractKeydown(e) {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const hlEl = e.target.closest && e.target.closest('[data-hl]');
+      if (!hlEl) return;
+      e.preventDefault(); // also swallows the native click a real <button> would fire
+      this.openNoteDialog(hlEl.dataset.hl);
+    },
+    /* Keyboard path to CREATE a highlight: extending a selection with
+       Shift+arrows (caret browsing) surfaces the same toolbar mouseup does. */
+    onTextKeyUp(e, context) {
+      if (!e.shiftKey || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) return;
+      this.showToolbarForSelection(e.currentTarget, context);
+    },
+    showToolbarForSelection(container, context) {
       const sel = window.getSelection();
       if (!sel || sel.rangeCount === 0 || sel.isCollapsed) { this.toolbar.show = false; return; }
       const range = sel.getRangeAt(0);
-      const container = e.currentTarget;
       if (!container.contains(range.commonAncestorContainer)) { this.toolbar.show = false; return; }
       const raw = this.cleanSelectionText(range);
       const text = raw.trim();
