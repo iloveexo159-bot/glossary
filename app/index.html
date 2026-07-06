@@ -604,7 +604,11 @@
 </div>
 
 <!-- ============ TOAST ============ -->
-<div class="toast" x-show="toast" x-cloak x-text="toast"></div>
+<!-- Visual toast is presentation-only; the sr-only announcer below carries the
+     same message to screen readers (a display:none-toggled element can't be a
+     reliable live region, so the announcer never leaves the accessibility tree). -->
+<div class="toast" x-show="toast" x-cloak x-text="toast" aria-hidden="true"></div>
+<div class="sr-only" role="status" aria-live="polite" x-text="announce"></div>
 
 <datalist id="all-tags">
   <template x-for="t in allTags()" :key="t"><option :value="t"></option></template>

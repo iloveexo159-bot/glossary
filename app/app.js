@@ -53,6 +53,7 @@ function glossaryApp() {
     prefs: { theme: 'light', brightness: 20, warmth: 0, fontScale: 1 },
     devices: [], pairCode: '', enterCode: '',
     toast: '', _toastTimer: null, _sugTimer: null,
+    announce: '', _announceTimer: null,
 
     /* ---------- init & routing ---------- */
     init() {
@@ -66,13 +67,27 @@ function glossaryApp() {
       this.route();
       this.$nextTick(() => this.focusSearch());
       // any change to the flashcard filters lands you back on page 1 —
-      // a stale page index against a shorter filtered list would look empty
-      this.$watch('cardSearch', () => { this.cardPage = 1; });
-      this.$watch('tagFilters', () => { this.cardPage = 1; });
-      this.$watch('reviewedFilter', () => { this.cardPage = 1; });
-      this.$watch('exportedFilter', () => { this.cardPage = 1; });
-      this.$watch('starFilter', () => { this.cardPage = 1; });
+      // a stale page index against a shorter filtered list would look empty.
+      // The same change re-announces the visible count for screen readers
+      // (debounced: typing in the card search must not spam the live region).
+      const onFilterChange = () => {
+        this.cardPage = 1;
+        if (this.page === 'cards' && this.cards.length) this.announceLive(this.footerText(), 500);
+      };
+      this.$watch('cardSearch', onFilterChange);
+      this.$watch('tagFilters', onFilterChange);
+      this.$watch('reviewedFilter', onFilterChange);
+      this.$watch('exportedFilter', onFilterChange);
+      this.$watch('starFilter', onFilterChange);
       this.$watch('mode', () => { this.cardPage = 1; });
+      // lookup lifecycle is otherwise silent to assistive tech
+      this.$watch('resultState', s => {
+        if (s === 'loading') this.announceLive('Looking up…');
+        else if (s === 'error') this.announceLive('No article found for "' + this.lastQuery + '".');
+        else if (s === 'offline') this.announceLive("You're offline and this term isn't cached yet.");
+        else if (s === 'disambig') this.announceLive('Several articles match — pick one from the list.');
+        else if (s === 'ok') this.announceLive((this.result ? this.result.title : 'Article') + ' — article loaded.');
+      });
     },
     route() {
       const h = location.hash || '#/home';
@@ -917,11 +932,19 @@ function glossaryApp() {
       this.showToast('Device access revoked');
     },
 
-    /* ---------- toast ---------- */
+    /* ---------- toast & live announcements ---------- */
     showToast(msg) {
       this.toast = msg;
       clearTimeout(this._toastTimer);
       this._toastTimer = setTimeout(() => { this.toast = ''; }, 2600);
+      this.announceLive(msg);
+    },
+    /* Clear-then-set so repeating the same message (two identical toasts in a
+       row) still registers as a change and gets re-announced by aria-live. */
+    announceLive(msg, delay = 50) {
+      this.announce = '';
+      clearTimeout(this._announceTimer);
+      this._announceTimer = setTimeout(() => { this.announce = msg; }, delay);
     },
   };
 }

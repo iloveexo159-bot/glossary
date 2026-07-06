@@ -76,6 +76,11 @@ body {
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }
 [x-cloak] { display: none !important; }
+/* Visually hidden but present for assistive tech (live regions, skip labels) */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
 ::selection { background: var(--color-highlight); }
 
 #warmth-overlay {
