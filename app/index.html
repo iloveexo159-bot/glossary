@@ -81,7 +81,9 @@
 
 <main>
   <!-- ============ HOME ============ -->
-  <section x-show="page==='home'">
+  <!-- x-cloak keeps the pre-hydration hero from being focusable-but-dead;
+       every section stays hidden until Alpine owns the x-show bindings -->
+  <section x-show="page==='home'" x-cloak>
     <div class="home-hero">
       <h1 class="wordmark">Glossary</h1>
       <p class="tagline">Look it up. Save it. Back to your book.</p>
