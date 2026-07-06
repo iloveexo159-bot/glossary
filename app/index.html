@@ -530,7 +530,8 @@
       <h2 class="heading" style="margin-top:0;">Link another device</h2>
       <p class="muted" style="font-family:var(--font-sans);font-size:var(--type-label-size);">Type the 6-digit code shown on your other device.</p>
       <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
-        <input class="text-input" x-model="enterCode" maxlength="6" inputmode="numeric" placeholder="000000" aria-label="Pairing code">
+        <input class="text-input" x-model="enterCode" maxlength="6" inputmode="numeric"
+               autocomplete="off" pattern="[0-9]{6}" placeholder="000000" aria-label="Pairing code">
         <button class="btn-primary" @click="pairDevice()">Link device</button>
       </div>
     </div>
@@ -538,7 +539,8 @@
 </main>
 
 <!-- ============ BOTTOM NAV (mobile) ============ -->
-<nav class="nav-bottom" aria-label="Primary">
+<!-- distinct landmark name — the top nav already owns "Primary" -->
+<nav class="nav-bottom" aria-label="Bottom">
   <a href="#/home" :class="{ active: page==='home' || page==='results' }">Home</a>
   <a href="#/cards" :class="{ active: page==='cards' || page==='detail' || page==='review' }">Collection</a>
 </nav>
