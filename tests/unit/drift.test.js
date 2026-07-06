@@ -34,6 +34,20 @@ test('drift clears itself when live text matches the saved copy again', () => {
   assert.equal(c.pendingUpdate, undefined, 'stale pending update is discarded');
 });
 
+test('drift stashes the new image dimensions and updateSavedCopy applies them', () => {
+  const comp = newComp();
+  const c = { id: 'c1', title: 'T', extract: 'original', image: null, imageW: null, imageH: null, drifted: false, highlights: [] };
+  comp.cards = [c];
+  comp.detailId = 'c1';
+  comp.checkDrift(c, { extract: 'edited', image: 'https://upload.wikimedia.org/new.jpg', imageW: 320, imageH: 240 });
+  assert.equal(c.pendingUpdate.imageW, 320, 'pending update carries the live width');
+  assert.equal(c.pendingUpdate.imageH, 240, 'pending update carries the live height');
+  comp.updateSavedCopy();
+  assert.equal(c.imageW, 320, 'reader-initiated update applies the width');
+  assert.equal(c.imageH, 240, 'reader-initiated update applies the height');
+  assert.equal(c.drifted, false);
+});
+
 test('an image-only change also counts as drift', () => {
   const comp = newComp();
   const c = { title: 'T', extract: 'same', image: 'https://upload.wikimedia.org/old.jpg', drifted: false, highlights: [] };

@@ -40,6 +40,16 @@ test('non-string fields are coerced or dropped, not passed through', () => {
   assert.equal(typeof clean.savedAt, 'number', 'invalid savedAt falls back to a timestamp');
 });
 
+test('imported image dimensions survive only as finite numbers', () => {
+  const comp = newComp();
+  const ok = comp.sanitizeCard({ title: 'X', image: 'https://upload.wikimedia.org/pic.jpg', imageW: 320, imageH: 240 });
+  assert.equal(ok.imageW, 320);
+  assert.equal(ok.imageH, 240);
+  const bad = comp.sanitizeCard({ title: 'X', imageW: '320', imageH: Infinity });
+  assert.equal(bad.imageW, null, 'a string width is dropped, not coerced');
+  assert.equal(bad.imageH, null, 'a non-finite height is dropped');
+});
+
 test('highlights with empty text are dropped; valid ones keep their fields', () => {
   const comp = newComp();
   const clean = comp.sanitizeCard({
