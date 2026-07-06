@@ -245,6 +245,10 @@ function glossaryApp() {
           title: data.title,
           extract: data.extract || '(No summary available for this article.)',
           image: data.thumbnail ? data.thumbnail.source : null,
+          // intrinsic dimensions let <img width/height> reserve layout space
+          // before the thumbnail loads — no reflow mid-reading
+          imageW: data.thumbnail ? data.thumbnail.width || null : null,
+          imageH: data.thumbnail ? data.thumbnail.height || null : null,
           revision: data.revision || null,
         };
         this.resultState = 'ok';
@@ -286,6 +290,8 @@ function glossaryApp() {
         title: this.result.title,
         extract: this.result.extract,
         image: this.result.image,
+        imageW: this.result.imageW || null,
+        imageH: this.result.imageH || null,
         revision: this.result.revision,
         savedAt: Date.now(),
         lastReviewedAt: null,
@@ -379,7 +385,11 @@ function glossaryApp() {
       const changed = live.extract !== card.extract || (live.image || null) !== (card.image || null);
       if (changed) {
         card.drifted = true;
-        card.pendingUpdate = { extract: live.extract, image: live.image || null, revision: live.revision || null };
+        card.pendingUpdate = {
+          extract: live.extract, image: live.image || null,
+          imageW: live.imageW || null, imageH: live.imageH || null,
+          revision: live.revision || null,
+        };
       } else if (card.drifted) {
         card.drifted = false; // saved copy now matches live again (e.g. after an update)
         delete card.pendingUpdate;
@@ -391,6 +401,8 @@ function glossaryApp() {
       if (!c || !c.pendingUpdate) return;
       c.extract = c.pendingUpdate.extract;
       c.image = c.pendingUpdate.image;
+      c.imageW = c.pendingUpdate.imageW || null;
+      c.imageH = c.pendingUpdate.imageH || null;
       c.revision = c.pendingUpdate.revision;
       c.drifted = false;
       delete c.pendingUpdate;
@@ -946,6 +958,8 @@ function glossaryApp() {
         extract: typeof raw.extract === 'string' ? raw.extract : '',
         note: typeof raw.note === 'string' ? raw.note : '',
         image: (typeof raw.image === 'string' && /^https:\/\/upload\.wikimedia\.org\//.test(raw.image)) ? raw.image : null,
+        imageW: num(raw.imageW),
+        imageH: num(raw.imageH),
         revision: num(raw.revision),
         savedAt: num(raw.savedAt) || Date.now(),
         lastReviewedAt: num(raw.lastReviewedAt),

@@ -163,7 +163,8 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4.5L5 21V4a1 1 0 0 1 1-1z"/></svg>
           </button>
         </div>
-        <img class="result-img" x-show="result?.image" :src="result?.image" :alt="result?.title" x-cloak>
+        <img class="result-img" x-show="result?.image" :src="result?.image" :alt="result?.title"
+             :width="result?.imageW" :height="result?.imageH" loading="lazy" decoding="async" x-cloak>
         <div class="extract" :class="{ collapsed: !expanded && isLong() }"
              @mouseup="onTextMouseUp($event, 'results')"
              @keydown="onExtractKeydown($event)"
@@ -422,7 +423,8 @@
           <button class="btn-text" x-show="currentCard().drifted" x-cloak @click="updateSavedCopy()">UPDATE SAVED COPY</button>
         </div>
 
-        <img class="result-img" x-show="currentCard().image" :src="currentCard().image" :alt="currentCard().title" x-cloak>
+        <img class="result-img" x-show="currentCard().image" :src="currentCard().image" :alt="currentCard().title"
+             :width="currentCard().imageW" :height="currentCard().imageH" loading="lazy" decoding="async" x-cloak>
         <div class="extract" @mouseup="onTextMouseUp($event, 'detail')"
              @keydown="onExtractKeydown($event)"
              @keyup="onTextKeyUp($event, 'detail')"
