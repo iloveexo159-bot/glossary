@@ -220,9 +220,11 @@
     </div>
 
     <div class="cards-toolbar">
-      <div class="mode-toggle" role="tablist" aria-label="Display mode">
-        <button :class="{ active: mode==='overview' }" @click="setMode('overview')">Overview</button>
-        <button :class="{ active: mode==='flashcards' }" @click="setMode('flashcards')">Flashcards</button>
+      <!-- Segmented toggles are groups of pressed/unpressed buttons, not tabs:
+           a tablist without tab/tabpanel wiring announces broken structure -->
+      <div class="mode-toggle" role="group" aria-label="Display mode">
+        <button :class="{ active: mode==='overview' }" :aria-pressed="mode==='overview'" @click="setMode('overview')">Overview</button>
+        <button :class="{ active: mode==='flashcards' }" :aria-pressed="mode==='flashcards'" @click="setMode('flashcards')">Flashcards</button>
       </div>
       <!-- Two doors into selection: Review and Export. Each declares intent up
            front, so the selection bar shows exactly one launch verb. -->
@@ -252,17 +254,17 @@
       <div class="filter-group" role="group" aria-label="Reviewed filter">
         <span class="caption">Reviewed</span>
         <div class="mode-toggle mode-toggle-sm">
-          <button :class="{ active: reviewedFilter==='all' }" @click="reviewedFilter='all'">All</button>
-          <button :class="{ active: reviewedFilter==='yes' }" @click="reviewedFilter='yes'">Yes</button>
-          <button :class="{ active: reviewedFilter==='no' }" @click="reviewedFilter='no'">No</button>
+          <button :class="{ active: reviewedFilter==='all' }" :aria-pressed="reviewedFilter==='all'" @click="reviewedFilter='all'">All</button>
+          <button :class="{ active: reviewedFilter==='yes' }" :aria-pressed="reviewedFilter==='yes'" @click="reviewedFilter='yes'">Yes</button>
+          <button :class="{ active: reviewedFilter==='no' }" :aria-pressed="reviewedFilter==='no'" @click="reviewedFilter='no'">No</button>
         </div>
       </div>
       <div class="filter-group" role="group" aria-label="Exported filter">
         <span class="caption">Exported</span>
         <div class="mode-toggle mode-toggle-sm">
-          <button :class="{ active: exportedFilter==='all' }" @click="exportedFilter='all'">All</button>
-          <button :class="{ active: exportedFilter==='yes' }" @click="exportedFilter='yes'">Yes</button>
-          <button :class="{ active: exportedFilter==='no' }" @click="exportedFilter='no'">No</button>
+          <button :class="{ active: exportedFilter==='all' }" :aria-pressed="exportedFilter==='all'" @click="exportedFilter='all'">All</button>
+          <button :class="{ active: exportedFilter==='yes' }" :aria-pressed="exportedFilter==='yes'" @click="exportedFilter='yes'">Yes</button>
+          <button :class="{ active: exportedFilter==='no' }" :aria-pressed="exportedFilter==='no'" @click="exportedFilter='no'">No</button>
         </div>
       </div>
       <button class="chip-filter" :class="{ active: starFilter }" @click="starFilter = !starFilter"
@@ -289,7 +291,7 @@
       <template x-for="c in pagedCards()" :key="c.id">
         <div class="flashcard" :class="{ selected: selected.includes(c.id) }" @click="cardClick(c)"
              role="button" tabindex="0" :aria-label="'Open ' + c.title"
-             @keydown.enter.prevent="cardClick(c)">
+             @keydown.enter.prevent="cardClick(c)" @keydown.space.prevent="cardClick(c)">
           <span class="select-check" x-show="selectMode" x-text="selected.includes(c.id) ? '✓' : ''" x-cloak></span>
           <button class="icon-btn star-btn" :class="{ starred: c.starred }" @click.stop="toggleStar(c.id)"
                   :aria-pressed="!!c.starred" :aria-label="(c.starred ? 'Unstar ' : 'Star ') + c.title"
@@ -462,10 +464,12 @@
     <div class="settings-group">
       <h2 class="heading" style="margin-top:0;">Display <span class="caption" style="margin-left:0.5rem;">per device — never synced</span></h2>
       <div class="settings-row">
-        <label for="set-theme">Theme</label>
-        <div class="mode-toggle" id="set-theme">
-          <button :class="{ active: prefs.theme==='light' }" @click="setPref('theme','light')">Light</button>
-          <button :class="{ active: prefs.theme==='dark' }" @click="setPref('theme','dark')">Dark</button>
+        <!-- a <div> isn't labelable, so no <label for>: the group carries the
+             name via aria-labelledby instead -->
+        <span class="settings-label" id="set-theme-label">Theme</span>
+        <div class="mode-toggle" role="group" aria-labelledby="set-theme-label">
+          <button :class="{ active: prefs.theme==='light' }" :aria-pressed="prefs.theme==='light'" @click="setPref('theme','light')">Light</button>
+          <button :class="{ active: prefs.theme==='dark' }" :aria-pressed="prefs.theme==='dark'" @click="setPref('theme','dark')">Dark</button>
         </div>
       </div>
       <div class="settings-row" x-show="prefs.theme==='light'">
@@ -485,7 +489,7 @@
     <div class="settings-group">
       <h2 class="heading" style="margin-top:0;">Backup</h2>
       <div class="settings-row">
-        <label>Manual JSON backup</label>
+        <span class="settings-label">Manual JSON backup</span>
         <div style="display:flex;gap:0.5rem;">
           <button class="btn-outline" @click="exportJson()">Export JSON</button>
           <button class="btn-outline" @click="$refs.importFile.click()">Import JSON</button>

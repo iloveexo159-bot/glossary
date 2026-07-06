@@ -456,7 +456,7 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
 /* ---------- Settings ---------- */
 .settings-group { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--rounded-md); padding: var(--space-lg); margin-bottom: var(--space-base); }
 .settings-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-base); padding: var(--space-sm) 0; flex-wrap: wrap; }
-.settings-row label { font-weight: 600; font-size: var(--type-ui-size); }
+.settings-row label, .settings-row .settings-label { font-weight: 600; font-size: var(--type-ui-size); }
 input[type="range"] { accent-color: var(--color-text-primary); width: min(240px, 60vw); }
 .device-row { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--color-border); padding: var(--space-sm) 0; }
 .pair-code { font-family: ui-monospace, Consolas, monospace; font-size: var(--type-title-size); letter-spacing: 0.25em; text-align: center; padding: var(--space-base); }
