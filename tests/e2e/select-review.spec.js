@@ -26,29 +26,38 @@ test('tag filter → create review session → flip, advance, and finish back at
   await card.locator('.flip-area').click(); // reveal the answer
   await expect(card).toHaveClass(/flipped/);
 
-  await page.getByRole('button', { name: 'Next card' }).click();
+  await page.getByRole('button', { name: 'Skip to next card' }).click();
   await expect(page.locator('.session-controls')).toContainText('2 / 2');
   await expect(card).not.toHaveClass(/flipped/); // advancing resets the flip
 
-  // finishing with nothing starred returns straight to the collection
+  // finishing lands on the results screen (not straight back to the collection)
   await page.getByRole('button', { name: 'Finish session' }).click();
+  await expect(page.locator('.session-result')).toBeVisible();
+  await page.getByRole('button', { name: 'Back to collection' }).click();
   await expect(page).toHaveURL(/#\/cards/);
 });
 
-test('starring during a session offers a starred-only second pass', async ({ page }) => {
+test('Right/Wrong verdicts produce a pass/fail result with Restart and Revise', async ({ page }) => {
   await openApp(page, { seed: [
-    seedCard({ id: 'a', title: 'Atom' }),
-    seedCard({ id: 'b', title: 'Cell' }),
+    seedCard({ id: 'a', title: 'Atom', extract: 'An atom.' }),
+    seedCard({ id: 'b', title: 'Cell', extract: 'A cell.' }),
   ] });
   await hashTo(page, '#/cards');
   await startSessionOf(page, 2);
 
-  await page.locator('.session-card .star-btn').click(); // star card 1
-  await page.getByRole('button', { name: 'Next card' }).click();
-  await page.getByRole('button', { name: 'Finish session' }).click();
+  // card 1: reveal, then mark Right (buttons are disabled until the card is flipped)
+  await page.locator('.session-card .flip-area').click();
+  await page.getByRole('button', { name: 'Mark right' }).click();
+  // card 2: reveal, then mark Wrong — the last card finishes the session
+  await page.locator('.session-card .flip-area').click();
+  await page.getByRole('button', { name: 'Mark wrong' }).click();
 
-  await expect(page.locator('.state-box:visible')).toContainText('Session complete');
-  await page.getByRole('button', { name: /Review starred again \(1\)/ }).click();
+  const result = page.locator('.session-result');
+  await expect(result).toBeVisible();
+  await expect(result).toContainText('You got 1/2 correct, and skipped 0 cards.');
+  await expect(result).toContainText('Not passed'); // 1 correct vs 1 wrong → no majority
+
+  await page.getByRole('button', { name: 'Revise wrong & skipped (1)' }).click();
   await expect(page.locator('.session-controls')).toContainText('1 / 1');
 });
 

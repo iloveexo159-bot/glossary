@@ -20,16 +20,13 @@ test('clearing the search on Results returns to Home', async ({ page }) => {
   await expect(page.locator('.home-hero')).toBeVisible();
 });
 
-test('cancelling the card note dialog does not persist the typed note', async ({ page }) => {
+test('typing in the inline note editor without saving does not persist across reload', async ({ page }) => {
   await openApp(page, { seed: [seedCard({ title: 'Atom' })] });
   await hashTo(page, '#/card/c1');
-  await page.locator('.bookmark-btn:visible').click();
-  const dlg = page.locator('.dialog[aria-label="Card note and tags"]');
-  await dlg.locator('textarea').fill('temporary — should not stick');
-  await dlg.getByRole('button', { name: 'CANCEL' }).click();
-
-  await page.locator('.bookmark-btn:visible').click();
-  await expect(dlg.locator('textarea')).toHaveValue('');
+  await page.locator('.note-editor:visible textarea').fill('temporary — should not stick');
+  // no Save pressed → reloading drops the uncommitted buffer; storage stays clean
+  await page.reload();
+  await expect(page.locator('.note-editor:visible textarea')).toHaveValue('');
 });
 
 test('deleting a card asks for confirmation and removes it on accept', async ({ page }) => {

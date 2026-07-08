@@ -24,16 +24,17 @@ test('first bookmark save creates exactly one card', () => {
   assert.equal(comp.toast, '✓ Saved to flashcards');
 });
 
-test('saving an already-saved term never creates a duplicate', () => {
+test('the bookmark is a toggle: a second click removes rather than duplicating', () => {
   const comp = newComp();
   comp.result = { title: 'Mitochondrion', extract: 'The powerhouse.', image: null };
   comp.toggleSaveIcon('results');
-  comp.closeCardDialog(false);
+  assert.equal(comp.cards.length, 1);
 
-  // Re-open the same result and hit the bookmark again.
+  // Bookmark again on the same result: it unsaves (no dialog, no duplicate).
+  // toggleSaveIcon checks resultCard() first, so a second card is impossible.
   comp.toggleSaveIcon('results');
-  assert.equal(comp.cards.length, 1, 'must reuse the existing card, not duplicate');
-  assert.equal(comp.cardDialog.show, true, 'should reopen the note/tags dialog instead');
+  assert.equal(comp.cards.length, 0, 'toggles off — never creates a second card');
+  assert.equal(comp.alreadySaved(), false);
 });
 
 test('duplicate check uses canonical title regardless of query casing', () => {

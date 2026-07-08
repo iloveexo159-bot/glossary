@@ -18,7 +18,10 @@ function lsGet(key, fallback) {
   catch { return fallback; }
 }
 function lsSet(key, value) {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* storage full/blocked */ }
+  // returns whether the write landed — callers surface a warning (and roll back)
+  // rather than firing a success toast over a silently-dropped save
+  try { localStorage.setItem(key, JSON.stringify(value)); return true; }
+  catch { return false; }
 }
 function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -43,13 +46,17 @@ function glossaryApp() {
     tagFilters: [], reviewedFilter: 'all', exportedFilter: 'all', starFilter: false,
     cardPage: 1, cardPageSize: 12,
     selectMode: false, selectIntent: 'review', selected: [], flipped: {},
-    // focused review session (#/review) — survives detours to a card's detail page
-    session: { ids: [], idx: 0, flipped: false, done: false },
+    // focused review session (#/review) — survives detours to a card's detail page.
+    // verdicts maps cardId → 'correct'|'wrong'; a card with no entry was skipped.
+    session: { ids: [], idx: 0, flipped: false, done: false, verdicts: {} },
     _histStack: [], _lastHash: '', _backNav: false,
     detailId: null,
     toolbar: { show: false, x: 0, y: 0, text: '', context: 'results' },
     noteDialog: { show: false, quote: '', text: '', tags: [], tagInput: '', highlightId: null, cardId: null },
-    cardDialog: { show: false, cardId: null, note: '', tags: [], tagInput: '' },
+    // inline card-level note/tags editor (results + detail) — replaces the old modal.
+    // The editor is an ADD/EDIT input that starts empty; a saved note moves to the
+    // "Existing notes" list below. `editing` re-opens the editor over a saved note.
+    cardEditor: { id: null, note: '', tags: [], tagInput: '', editing: false },
     exportSheet: false,
     prefs: { theme: 'light', brightness: 20, warmth: 0, fontScale: 1 },
     devices: [], pairCode: '', enterCode: '',
@@ -84,7 +91,6 @@ function glossaryApp() {
       // modal focus management: one watcher set covers every open/close path,
       // including the inline `exportSheet = false` handlers in the HTML
       this.$watch('noteDialog.show', open => this.syncDialogFocus(open));
-      this.$watch('cardDialog.show', open => this.syncDialogFocus(open));
       this.$watch('exportSheet', open => this.syncDialogFocus(open));
       // lookup lifecycle is otherwise silent to assistive tech
       this.$watch('resultState', s => {
@@ -92,7 +98,7 @@ function glossaryApp() {
         else if (s === 'error') this.announceLive('No article found for "' + this.lastQuery + '".');
         else if (s === 'offline') this.announceLive("You're offline and this term isn't cached yet.");
         else if (s === 'disambig') this.announceLive('Several articles match — pick one from the list.');
-        else if (s === 'ok') this.announceLive((this.result ? this.result.title : 'Article') + ' — article loaded.');
+        else if (s === 'ok') { this.announceLive((this.result ? this.result.title : 'Article') + ' — article loaded.'); this.syncCardEditor(this.resultCard()); }
       });
     },
     route() {
@@ -113,6 +119,7 @@ function glossaryApp() {
         this.page = 'detail';
         this.detailId = parts[1];
         this.markReviewed(parts[1]);
+        this.syncCardEditor(this.currentCard());
       } else if (p === 'review') {
         // the session lives in component state, not the URL — a deep link or
         // reload with no session running falls back to the collection page
@@ -260,12 +267,19 @@ function glossaryApp() {
         const data = await res.json();
         if (data.type === 'disambiguation') {
           // A disambiguation stub is "no useful single article" — the same
-          // dead-end the dictionary rescues. Keep Wikipedia's candidates, but
-          // offer the dictionary definition alongside them (e.g. "ignominy",
-          // whose disambiguation lists only obscure works by that name).
-          this.resultState = 'disambig';
+          // dead-end the dictionary rescues. Resolve candidates FIRST, then
+          // decide: a non-empty list shows the picker (with a dictionary banner
+          // alongside, e.g. "ignominy"); an empty list would strand the reader
+          // on a heading with nothing under it, so we fall through to the
+          // dictionary, which lands on a definition or the real error screen.
           await this.fetchCandidates(term);
-          this.probeDictionaryOption(term);
+          if (this.lastQuery !== term) return; // a newer lookup superseded this one
+          if (this.candidates.length) {
+            this.resultState = 'disambig';
+            this.probeDictionaryOption(term);
+          } else {
+            await this.fetchDictionary(term);
+          }
           return;
         }
         this.result = {
@@ -422,57 +436,73 @@ function glossaryApp() {
         drifted: false,
       };
       this.cards.push(card);
-      this.persistCards();
+      // don't keep a card the store refused — roll back so the icon and the
+      // in-memory list stay honest (no phantom that vanishes on reload)
+      if (!this.persistCards()) {
+        this.cards.pop();
+        this.showToast('⚠ Couldn’t save — device storage may be full');
+        return null;
+      }
       return card;
     },
-    /* Bookmark icon: the single save control. First click saves the card and
-       opens the note+tags dialog; when already saved it reopens the dialog. */
+    /* Bookmark icon: the single save control. Saving is immediate — no dialog.
+       Notes & tags are edited inline below the article. Clicking an already-
+       saved icon removes the card (guarded when it holds notes/highlights). */
     toggleSaveIcon(context) {
-      let card = context === 'results' ? this.resultCard() : this.currentCard();
-      if (!card && context === 'results') {
-        card = this.createCardFromResult();
-        if (card) this.showToast('✓ Saved to flashcards');
+      const card = context === 'results' ? this.resultCard() : this.currentCard();
+      if (card) { this.unsaveCard(card); return; }
+      if (context === 'results') {
+        const made = this.createCardFromResult();
+        if (made) { this.showToast('✓ Saved to flashcards'); this.syncCardEditor(made); }
       }
-      if (card) this.openCardDialog(card.id);
     },
-    openCardDialog(id) {
-      const c = this.cards.find(x => x.id === id);
-      if (!c) return;
-      this.cardDialog = { show: true, cardId: id, note: c.note || '', tags: [...(c.tags || [])], tagInput: '' };
-      this.$nextTick(() => this.$refs.cardNoteText && this.$refs.cardNoteText.focus());
-    },
-    cardDialogTitle() {
-      const c = this.cards.find(x => x.id === this.cardDialog.cardId);
-      return c ? c.title : 'Note & tags';
-    },
-    closeCardDialog(save) {
-      if (save) {
-        const c = this.cards.find(x => x.id === this.cardDialog.cardId);
-        if (c) {
-          const pending = this.cardDialog.tagInput.trim().replace(/^#/, '');
-          if (pending) this.cardDialog.tags.push(pending);
-          c.note = this.cardDialog.note.trim();
-          c.tags = [...new Set(this.cardDialog.tags)];
-          this.persistCards();
-          this.showToast('✓ Note & tags saved');
-        }
-      }
-      this.cardDialog.show = false;
-    },
-    /* DELETE in the dialog unsaves the whole card (icon unshades);
-       confirm first when highlights would be lost with it. */
-    deleteFromCardDialog() {
-      const c = this.cards.find(x => x.id === this.cardDialog.cardId);
-      if (!c) { this.cardDialog.show = false; return; }
-      const n = (c.highlights || []).length;
-      if (n > 0 && !confirm(`Delete "${c.title}"? Its ${n} highlight${n === 1 ? '' : 's'} will be lost too.`)) return;
-      this.cards = this.cards.filter(x => x.id !== c.id);
+    unsaveCard(card) {
+      const n = (card.highlights || []).length;
+      const hasContent = n > 0 || (card.note && card.note.trim()) || (card.tags || []).length;
+      if (hasContent && !confirm(`Remove “${card.title}” from flashcards? Your notes and ${n} highlight${n === 1 ? '' : 's'} will be lost.`)) return;
+      this.cards = this.cards.filter(c => c.id !== card.id);
       this.persistCards();
-      this.cardDialog.show = false;
-      this.showToast('Card deleted');
+      this.syncCardEditor(null);
+      this.showToast('Removed from flashcards');
       if (this.page === 'detail') this.nav('cards');
     },
-    persistCards() { lsSet(LS.cards, this.cards); },
+    /* ---------- inline card note & tags editor (results + detail) ----------
+       The editor is an ADD/EDIT input: it always points at the active card but
+       starts empty. Saving commits the note/tags to the card and clears the
+       input, so the note surfaces in the "Existing notes" list below rather than
+       lingering in the box. EDIT there loads it back for changes. */
+    editorCard() { return this.cards.find(c => c.id === this.cardEditor.id) || null; },
+    resetEditor(id) { this.cardEditor = { id: id ?? null, note: '', tags: [], tagInput: '', editing: false }; },
+    syncCardEditor(card) { this.resetEditor(card ? card.id : null); },
+    editCardNote() {
+      const c = this.editorCard();
+      if (!c) return;
+      this.cardEditor.note = c.note || '';
+      this.cardEditor.tags = [...(c.tags || [])];
+      this.cardEditor.tagInput = '';
+      this.cardEditor.editing = true;
+    },
+    cancelCardNote() { this.resetEditor(this.cardEditor.id); },
+    saveCardEditor() {
+      const c = this.editorCard();
+      if (!c) return;
+      const pending = this.cardEditor.tagInput.trim().replace(/^#/, '');
+      if (pending && !this.cardEditor.tags.includes(pending)) this.cardEditor.tags.push(pending);
+      c.note = this.cardEditor.note.trim();
+      c.tags = [...new Set(this.cardEditor.tags)];
+      const ok = this.persistCards();
+      this.resetEditor(c.id); // clear the input; the saved note now shows below
+      this.showToast(ok ? '✓ Note & tags saved' : '⚠ Couldn’t save — device storage may be full');
+    },
+    removeCardNote() {
+      const c = this.editorCard();
+      if (!c) return;
+      c.note = ''; c.tags = [];
+      this.persistCards();
+      this.resetEditor(c.id);
+      this.showToast('Note & tags removed');
+    },
+    persistCards() { return lsSet(LS.cards, this.cards); },
     currentCard() { return this.cards.find(c => c.id === this.detailId) || null; },
     cardClick(c) {
       if (this.selectMode) {
@@ -535,7 +565,7 @@ function glossaryApp() {
         h.start = idx >= 0 ? idx : null;
         if (idx < 0) lost += 1;
       });
-      this.persistCards();
+      if (!this.persistCards()) { this.showToast('⚠ Couldn’t save — device storage may be full'); return; }
       this.showToast(lost
         ? `✓ Updated — ${lost} highlight${lost === 1 ? '' : 's'} no longer match the new text`
         : '✓ Saved copy updated to the latest Wikipedia version');
@@ -584,6 +614,12 @@ function glossaryApp() {
         ? this.tagFilters.filter(x => x !== t)
         : [...this.tagFilters, t];
     },
+    /* One reset for the "no cards match your filters" empty state — clears every
+       narrowing control at once so the full collection reappears. */
+    clearCardFilters() {
+      this.cardSearch = ''; this.tagFilters = [];
+      this.reviewedFilter = 'all'; this.exportedFilter = 'all'; this.starFilter = false;
+    },
 
     /* ---------- focused review session ---------- */
     startSession(ids) {
@@ -594,7 +630,7 @@ function glossaryApp() {
       const want = new Set(ids);
       const valid = this.computeReviewOrder().filter(id => want.has(id));
       if (!valid.length) return;
-      this.session = { ids: valid, idx: 0, flipped: false, done: false };
+      this.session = { ids: valid, idx: 0, flipped: false, done: false, verdicts: {} };
       this.selectMode = false; this.selectIntent = 'review'; this.selected = [];
       this.nav('review');
     },
@@ -628,17 +664,38 @@ function glossaryApp() {
       const c = this.cards.find(x => x.id === id);
       if (c) { c.starred = !c.starred; this.persistCards(); }
     },
-    sessionStarredIds() {
-      return this.session.ids.filter(id => (this.cards.find(c => c.id === id) || {}).starred);
+    /* Right/Wrong record a verdict and advance. A card the reader passes with
+       the → button instead never gets a verdict — that absence is the "skip". */
+    markVerdict(v) {
+      const c = this.sessionCard();
+      if (!c) return;
+      this.session.verdicts[c.id] = v;
+      this.markReviewed(c.id);
+      this.sessionNext();
     },
-    finishSession() {
-      // starred cards earn an offer to run them again; otherwise straight home
-      if (this.sessionStarredIds().length) this.session.done = true;
-      else { this.exitSession(); this.showToast('✓ Review complete'); }
+    finishSession() { this.session.done = true; },
+    sessionStats() {
+      const total = this.session.ids.length;
+      let correct = 0, wrong = 0;
+      this.session.ids.forEach(id => {
+        const v = this.session.verdicts[id];
+        if (v === 'correct') correct += 1;
+        else if (v === 'wrong') wrong += 1;
+      });
+      const skipped = total - correct - wrong;
+      // pass = a strict majority of the whole deck is correct; skips count against you
+      return { total, correct, wrong, skipped, passed: correct > wrong + skipped };
     },
-    reviewStarredAgain() { this.startSession(this.sessionStarredIds()); },
+    restartSession() { this.startSession(this.session.ids); },
+    /* Re-drill everything not marked correct — wrong answers AND cards skipped
+       past. Skips are a "not now", so the natural next pass gathers them with
+       the misses rather than stranding them. */
+    reviseMissed() {
+      const missed = this.session.ids.filter(id => this.session.verdicts[id] !== 'correct');
+      if (missed.length) this.startSession(missed);
+    },
     exitSession() {
-      this.session = { ids: [], idx: 0, flipped: false, done: false };
+      this.session = { ids: [], idx: 0, flipped: false, done: false, verdicts: {} };
       this.nav('cards');
     },
 
@@ -844,7 +901,12 @@ function glossaryApp() {
       }
       const h = { id: uid(), text, start, note: '', tags: [], createdAt: Date.now() };
       card.highlights.push(h);
-      this.persistCards();
+      if (!this.persistCards()) {
+        card.highlights.pop(); // don't leave a highlight the store dropped
+        this.showToast('⚠ Couldn’t save — device storage may be full');
+        window.getSelection()?.removeAllRanges();
+        return;
+      }
       if (withNote) {
         this.openNoteDialog(h.id);
       } else {
@@ -921,8 +983,7 @@ function glossaryApp() {
           if (pending) this.noteDialog.tags.push(pending);
           found.h.note = this.noteDialog.text.trim();
           found.h.tags = [...new Set(this.noteDialog.tags)];
-          this.persistCards();
-          this.showToast('✓ Note saved');
+          this.showToast(this.persistCards() ? '✓ Note saved' : '⚠ Couldn’t save — device storage may be full');
         }
       }
       this.noteDialog.show = false;
@@ -945,7 +1006,7 @@ function glossaryApp() {
 
     /* ---------- tags ---------- */
     onTagKeydown(e, target) {
-      const dlg = target === 'note' ? this.noteDialog : this.cardDialog;
+      const dlg = target === 'note' ? this.noteDialog : this.cardEditor;
       const isCommit = e.key === ' ' || e.key === 'Enter' || e.key === ',';
       if (isCommit) {
         e.preventDefault();
@@ -1108,8 +1169,9 @@ function glossaryApp() {
             const clean = this.sanitizeCard(c);
             if (clean && !this.findByTitle(clean.title)) { this.cards.push(clean); added++; }
           });
-          this.persistCards();
-          this.showToast(`✓ Imported ${added} card${added === 1 ? '' : 's'}`);
+          this.showToast(this.persistCards()
+            ? `✓ Imported ${added} card${added === 1 ? '' : 's'}`
+            : '⚠ Couldn’t save import — device storage may be full');
         } catch {
           this.showToast('Import failed — not a Glossary backup file');
         }

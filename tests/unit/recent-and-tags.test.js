@@ -55,10 +55,10 @@ test('a leading # is stripped and duplicate tags are ignored', () => {
   assert.deepEqual(Array.from(comp.noteDialog.tags), ['sapiens'], 'no duplicate added');
 });
 
-test('backspace on an empty input pops the last tag', () => {
+test('backspace on an empty input pops the last tag (inline card editor)', () => {
   const comp = newComp();
-  comp.cardDialog.tags = ['a', 'b'];
-  comp.cardDialog.tagInput = '';
-  comp.onTagKeydown(tagEvent('Backspace'), 'carddlg');
-  assert.deepEqual(Array.from(comp.cardDialog.tags), ['a']);
+  comp.cardEditor.tags = ['a', 'b'];
+  comp.cardEditor.tagInput = '';
+  comp.onTagKeydown(tagEvent('Backspace'), 'card');
+  assert.deepEqual(Array.from(comp.cardEditor.tags), ['a']);
 });

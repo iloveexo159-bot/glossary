@@ -9,22 +9,21 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { newComp } = require('./helpers/load-app');
 
-test('cancelling the card dialog discards edits (no save)', () => {
+test('editing the inline note buffer without saving leaves the card untouched', () => {
   const comp = newComp();
   comp.cards = [{ id: 'c1', title: 'T', note: 'original', tags: [], highlights: [] }];
-  comp.openCardDialog('c1');
-  comp.cardDialog.note = 'typed but not saved';
-  comp.closeCardDialog(false); // Cancel / ✕ / Esc
-  assert.equal(comp.cards[0].note, 'original', 'edit is discarded on cancel');
-  assert.equal(comp.cardDialog.show, false);
+  comp.syncCardEditor(comp.cards[0]);
+  comp.cardEditor.note = 'typed but not saved';
+  // no saveCardEditor() call — the buffer is never committed (navigating away)
+  assert.equal(comp.cards[0].note, 'original', 'edit is discarded until Save is pressed');
 });
 
-test('saving the card dialog commits a pending (uncommitted) tag in the input', () => {
+test('saving the inline editor commits a pending (uncommitted) tag in the input', () => {
   const comp = newComp();
   comp.cards = [{ id: 'c1', title: 'T', note: '', tags: [], highlights: [] }];
-  comp.openCardDialog('c1');
-  comp.cardDialog.tagInput = 'sapiens'; // user typed a tag but never pressed space
-  comp.closeCardDialog(true);
+  comp.syncCardEditor(comp.cards[0]);
+  comp.cardEditor.tagInput = 'sapiens'; // user typed a tag but never pressed space
+  comp.saveCardEditor();
   assert.deepEqual(Array.from(comp.cards[0].tags), ['sapiens'], 'unconfirmed tag is not lost on save');
 });
 
@@ -37,33 +36,31 @@ test('removeHighlight (inline REMOVE) deletes a single highlight without confirm
   assert.deepEqual(Array.from(comp.cards[0].highlights.map((h) => h.id)), ['h2']);
 });
 
-test('deleting a card WITH highlights warns with the exact highlight count', () => {
+test('unsaving a card WITH highlights warns with the exact highlight count', () => {
   const comp = newComp();
   let asked = '';
   comp._ctx.confirm = (msg) => { asked = msg; return true; };
   comp.cards = [{ id: 'c1', title: 'Atom', note: '', tags: [], highlights: [
     { id: 'h1', text: 'a', tags: [] }, { id: 'h2', text: 'b', tags: [] },
   ] }];
-  comp.cardDialog.cardId = 'c1';
-  comp.deleteFromCardDialog();
+  comp.unsaveCard(comp.cards[0]);
   assert.match(asked, /2 highlights will be lost/, 'confirm names how much is at stake');
   assert.equal(comp.cards.length, 0);
 });
 
-test('declining the delete confirm keeps the card intact', () => {
+test('declining the unsave confirm keeps the card intact', () => {
   const comp = newComp();
   comp._ctx.confirm = () => false; // user clicks Cancel in the browser confirm
   comp.cards = [{ id: 'c1', title: 'Atom', note: '', tags: [], highlights: [{ id: 'h1', text: 'a', tags: [] }] }];
-  comp.cardDialog.cardId = 'c1';
-  comp.deleteFromCardDialog();
-  assert.equal(comp.cards.length, 1, 'nothing deleted when the reader backs out');
+  comp.unsaveCard(comp.cards[0]);
+  assert.equal(comp.cards.length, 1, 'nothing removed when the reader backs out');
 });
 
 test('GAP: the Detail page "DELETE CARD" button uses a generic confirm (no highlight count)', () => {
   // PRD §2.1 says the destructive unsave should confirm "if highlights would
-  // be lost". deleteFromCardDialog() honours that with a counted message, but
-  // deleteCard() (the DELETE CARD button on Detail) shows a generic prompt that
-  // does not tell the reader how many highlights they are about to lose.
+  // be lost". unsaveCard() (the bookmark toggle) honours that with a counted
+  // message, but deleteCard() (the DELETE CARD button on Detail) shows a generic
+  // prompt that does not tell the reader how many highlights they are about to lose.
   const comp = newComp();
   let asked = '';
   comp._ctx.confirm = (msg) => { asked = msg; return true; };

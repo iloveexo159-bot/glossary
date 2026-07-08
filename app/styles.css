@@ -340,14 +340,16 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
    below (the footer never rotates — it is the "view article" affordance).
    The flip is a functional state change, not decoration: 250ms, and the
    global reduced-motion rule collapses it to an instant swap. */
+/* The outer card is a transparent 3D stage — the visible surface (background,
+   border, rounded corners) lives on the two faces, so the ENTIRE card turns on
+   flip, not just its inner content. */
 .review-card {
-  position: relative; background: var(--color-surface); border: 1px solid var(--color-border);
-  border-radius: var(--rounded-md); width: 100%; overflow: hidden;
+  position: relative; width: 100%;
   display: flex; flex-direction: column;
   font-family: var(--font-sans); color: var(--color-text-primary); text-align: center;
   perspective: 1000px;
 }
-.review-card:hover { border-color: var(--color-border-strong); box-shadow: var(--shadow-sm); }
+.review-card:hover .face { border-color: var(--color-border-strong); box-shadow: var(--shadow-sm); }
 .review-card .term-big { font-family: var(--font-serif); font-size: var(--type-title-size); line-height: var(--type-title-lh); font-weight: 700; }
 .review-card .summary { font-family: var(--font-serif); font-size: var(--type-body-size); line-height: var(--type-body-lh); }
 
@@ -360,6 +362,8 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
 .review-card.flipped .flip-area, .session-card.flipped .flip-area { transform: rotateY(180deg); }
 .flip-area .face {
   position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden;
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--rounded-md); overflow: hidden;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: var(--space-md); padding: var(--space-xl);
 }
@@ -390,11 +394,11 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
 .session-wrap { max-width: 720px; margin: 0 auto; }
 .session-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-base); }
 .session-card {
-  position: relative; background: var(--color-surface); border: 1px solid var(--color-border);
-  border-radius: var(--rounded-md); overflow: hidden; display: flex; flex-direction: column;
+  position: relative; display: flex; flex-direction: column;
   text-align: center; perspective: 1200px;
 }
 .session-card .flip-area { min-height: min(52vh, 420px); }
+.session-card:hover .face { border-color: var(--color-border-strong); }
 .session-card .summary {
   font-family: var(--font-serif); font-size: var(--type-body-size); line-height: var(--type-body-lh);
   text-align: left;
@@ -405,6 +409,35 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
 .session-controls { display: flex; align-items: center; justify-content: center; gap: var(--space-lg); margin-top: var(--space-lg); }
 .icon-btn:disabled { opacity: 0.35; cursor: default; }
 .icon-btn:disabled:hover { outline: none; color: var(--color-text-secondary); }
+
+/* Right/Wrong verdicts — monochrome (no red/green): the chosen verdict inverts
+   to a filled chip, and both disable until the answer is revealed. */
+.verdict-row { display: flex; align-items: center; justify-content: center; gap: var(--space-base); margin-top: var(--space-lg); }
+.verdict-btn {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  min-height: max(2.75rem, 44px); padding: 0.5rem 1.5rem; border-radius: var(--rounded-sm);
+  background: var(--color-surface); border: 1px solid var(--color-border-strong);
+  color: var(--color-text-primary); font-family: var(--font-sans); font-weight: 700;
+  font-size: var(--type-ui-size); cursor: pointer;
+}
+.verdict-btn:hover:not(:disabled) { background: var(--color-background); }
+.verdict-btn.marked { background: var(--color-text-primary); color: var(--color-surface); border-color: var(--color-text-primary); }
+.verdict-btn:disabled { opacity: 0.4; cursor: default; }
+.session-result .result-headline {
+  font-family: var(--font-serif); font-size: var(--type-heading-size); line-height: var(--type-heading-lh);
+  font-weight: 700; color: var(--color-text-primary); margin-bottom: var(--space-sm);
+}
+
+/* Inline card note & tags editor (results + detail) — mirrors the retired
+   modal's field styling, now living in the page flow below the article. */
+.note-editor { border: 1px solid var(--color-border); border-radius: var(--rounded-md); background: var(--color-surface); padding: var(--space-base); margin-bottom: var(--space-md); }
+.note-editor textarea {
+  width: 100%; min-height: 72px; resize: vertical; border: none; background: transparent;
+  font-family: var(--font-serif); font-size: var(--type-body-size); color: var(--color-text-primary);
+  border-bottom: 1px solid var(--color-border); padding: var(--space-sm) 0; margin-bottom: var(--space-md);
+}
+.note-editor textarea:focus { outline: none; border-bottom-color: var(--color-text-primary); }
+.note-editor .editor-actions { display: flex; justify-content: flex-end; margin-top: var(--space-md); }
 
 .book-footer { text-align: center; padding: var(--space-base); }
 

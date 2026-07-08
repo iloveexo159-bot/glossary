@@ -122,7 +122,7 @@ test('star filter shows only starred cards', () => {
   assert.deepEqual(Array.from(comp.visibleCards().map((c) => c.id)), ['a']);
 });
 
-test('a review session walks the selected cards, marks them reviewed, and exits clean', () => {
+test('a review session walks the selected cards, marks them reviewed, and ends on the results screen', () => {
   const comp = newComp();
   comp.cards = [card({ id: 'a' }), card({ id: 'b' }), card({ id: 'c' })];
   comp.startSession(['a', 'c']);
@@ -135,22 +135,65 @@ test('a review session walks the selected cards, marks them reviewed, and exits 
   assert.equal(comp.sessionCard().id, 'c');
   assert.equal(comp.session.flipped, false, 'advancing resets the flip');
 
-  comp.sessionNext(); // past the last card, nothing starred → session ends
-  assert.equal(comp.session.ids.length, 0);
-  assert.equal(comp.toast, '✓ Review complete');
+  comp.sessionNext(); // past the last card → results screen (not an instant exit)
+  assert.equal(comp.session.done, true, 'shows the results screen');
+  assert.deepEqual(Array.from(comp.session.ids), ['a', 'c'], 'deck retained for Restart/Revise');
 });
 
-test('finishing with starred cards offers a starred-only second pass', () => {
+test('verdicts feed the score; advancing without judging is a skip', () => {
+  const comp = newComp();
+  comp.cards = [card({ id: 'a' }), card({ id: 'b' }), card({ id: 'c' })];
+  comp.startSession(['a', 'b', 'c']);
+  comp.sessionFlip(); comp.markVerdict('correct'); // a → Right, advances to b
+  comp.sessionNext();                              // b skipped
+  comp.sessionFlip(); comp.markVerdict('wrong');   // c → Wrong (last → finishes)
+  assert.equal(comp.session.done, true);
+  // spread into the test realm: the vm sandbox gives app objects a different
+  // Object.prototype, which deepStrictEqual rejects across realms
+  assert.deepEqual({ ...comp.sessionStats() }, { total: 3, correct: 1, wrong: 1, skipped: 1, passed: false });
+});
+
+test('pass rule is a strict majority: correct must exceed wrong + skipped', () => {
+  const comp = newComp();
+  comp.cards = [card({ id: 'a' }), card({ id: 'b' }), card({ id: 'c' })];
+  // 2 correct, 1 skipped → 2 > 1 → pass
+  comp.startSession(['a', 'b', 'c']);
+  comp.sessionFlip(); comp.markVerdict('correct');
+  comp.sessionFlip(); comp.markVerdict('correct');
+  comp.sessionNext(); // skip the last
+  assert.equal(comp.sessionStats().passed, true, '2 correct vs 1 skipped passes');
+
+  // 1 correct, 1 wrong, 1 skipped → 1 > 2 is false → fail
+  comp.startSession(['a', 'b', 'c']);
+  comp.sessionFlip(); comp.markVerdict('correct');
+  comp.sessionFlip(); comp.markVerdict('wrong');
+  comp.sessionNext();
+  assert.equal(comp.sessionStats().passed, false, 'skips count against a pass');
+});
+
+test('Revise restarts with the wrong AND skipped cards and clears verdicts', () => {
+  const comp = newComp();
+  comp.cards = [card({ id: 'a' }), card({ id: 'b' }), card({ id: 'c' })];
+  comp.startSession(['a', 'b', 'c']);
+  comp.sessionFlip(); comp.markVerdict('correct'); // a correct
+  comp.sessionNext();                              // b skipped
+  comp.sessionFlip(); comp.markVerdict('wrong');   // c wrong → finishes
+  comp.reviseMissed();
+  assert.deepEqual(Array.from(comp.session.ids).sort(), ['b', 'c'], 'wrong + skipped both return');
+  assert.equal(comp.session.done, false);
+  assert.equal(Object.keys(comp.session.verdicts).length, 0, 'verdicts reset for the new pass');
+});
+
+test('Restart replays the whole deck and clears verdicts', () => {
   const comp = newComp();
   comp.cards = [card({ id: 'a' }), card({ id: 'b' })];
   comp.startSession(['a', 'b']);
-  comp.toggleStar('a');
-  comp.session.idx = 1;
-  comp.sessionNext(); // finish
-  assert.equal(comp.session.done, true, 'completion screen instead of instant exit');
-  comp.reviewStarredAgain();
-  assert.deepEqual(Array.from(comp.session.ids), ['a']);
+  comp.sessionFlip(); comp.markVerdict('correct');
+  comp.sessionFlip(); comp.markVerdict('wrong'); // finishes
+  comp.restartSession();
+  assert.deepEqual(Array.from(comp.session.ids).sort(), ['a', 'b']);
   assert.equal(comp.session.done, false);
+  assert.equal(Object.keys(comp.session.verdicts).length, 0);
 });
 
 test('shuffleSession keeps the same cards and returns to the first position', () => {

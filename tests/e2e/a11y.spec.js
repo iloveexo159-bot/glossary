@@ -19,14 +19,16 @@ const annotated = () => seedCard({
 const desktopOnly = (testInfo) =>
   test.skip(testInfo.project.name === 'mobile-chromium', 'keyboard-only behavior — desktop coverage is sufficient');
 
-const cardDialog = (page) => page.locator('.dialog[aria-label="Card note and tags"]');
+const noteDialog = (page) => page.locator('.dialog[aria-label="Note"]');
 
-test('card dialog traps Tab in both directions and returns focus to its opener', async ({ page }, testInfo) => {
+test('the note dialog traps Tab in both directions and returns focus to its opener', async ({ page }, testInfo) => {
   desktopOnly(testInfo);
-  await openApp(page, { seed: [seedCard()] });
+  await openApp(page, { seed: [annotated()] });
   await hashTo(page, '#/card/c1');
-  await page.locator('.bookmark-btn:visible').click();
-  const dlg = cardDialog(page);
+  const mark = page.locator('mark.hl');
+  await mark.focus();
+  await page.keyboard.press('Enter'); // open the highlight's note dialog
+  const dlg = noteDialog(page);
   await expect(dlg).toBeVisible();
   await expect(dlg.locator('textarea')).toBeFocused();
 
@@ -44,21 +46,21 @@ test('card dialog traps Tab in both directions and returns focus to its opener',
 
   await page.keyboard.press('Escape');
   await expect(dlg).toBeHidden();
-  await expect(page.locator('.bookmark-btn:visible')).toBeFocused();
+  await expect(mark).toBeFocused();
 });
 
 test('the page behind an open dialog is inert, including the bottom nav', async ({ page }) => {
-  await openApp(page, { seed: [seedCard()] });
+  await openApp(page, { seed: [annotated()] });
   await hashTo(page, '#/card/c1');
-  await page.locator('.bookmark-btn:visible').click();
-  await expect(cardDialog(page)).toBeVisible();
+  await page.locator('mark.hl').click(); // clicking a highlight opens its note dialog
+  await expect(noteDialog(page)).toBeVisible();
 
   await expect(page.locator('main')).toHaveJSProperty('inert', true);
   await expect(page.locator('.top-bar')).toHaveJSProperty('inert', true);
   await expect(page.locator('.nav-bottom')).toHaveJSProperty('inert', true);
 
-  await cardDialog(page).getByRole('button', { name: 'CANCEL' }).click();
-  await expect(cardDialog(page)).toBeHidden();
+  await noteDialog(page).getByRole('button', { name: 'CANCEL' }).click();
+  await expect(noteDialog(page)).toBeHidden();
   await expect(page.locator('main')).toHaveJSProperty('inert', false);
   await expect(page.locator('.nav-bottom')).toHaveJSProperty('inert', false);
 });

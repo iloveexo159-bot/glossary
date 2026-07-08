@@ -163,7 +163,7 @@
           <span class="badge-drift" x-show="resultCard()?.drifted" x-cloak style="margin-top:0.75rem;">Updated on Wikipedia</span>
           <button class="icon-btn bookmark-btn" :class="{ saved: alreadySaved() }" style="margin-left:auto;"
                   @click="toggleSaveIcon('results')"
-                  :aria-label="alreadySaved() ? 'Saved — edit note and tags' : 'Save as flashcard'"
+                  :aria-label="alreadySaved() ? 'Remove from flashcards' : 'Save as flashcard'"
                   :aria-pressed="alreadySaved()">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4.5L5 21V4a1 1 0 0 1 1-1z"/></svg>
           </button>
@@ -193,19 +193,40 @@
         <div class="result-actions">
           <button class="btn-primary" x-show="alreadySaved()" x-cloak @click="nav('cards')">View all flashcards</button>
           <span class="muted" style="font-size:var(--type-label-size);"
-                x-text="alreadySaved() ? 'Select text to highlight & save' : 'Tap the bookmark to save, or select text to highlight & save'"></span>
+                x-text="alreadySaved() ? 'Add notes & tags below, or select text to highlight' : 'Tap the bookmark to save, or select text to highlight & save'"></span>
         </div>
 
-        <!-- Highlights & notes — appears right here once the card has annotations.
-             Card-level note+tags render as the same white card as highlights. -->
-        <div x-show="resultCard() && (resultCard().highlights.length || resultCard().note || resultCard().tags.length)" x-cloak>
-          <h2 class="heading">Highlights &amp; notes</h2>
+        <!-- Add / edit notes & tags — inline card-level editor. Shown while the
+             card has no saved note yet, or when EDIT re-opens it. Saving clears
+             the input; the note then appears under "Existing notes" below. -->
+        <div class="note-editor" x-show="resultCard() && (!(resultCard().note || resultCard().tags.length) || cardEditor.editing)" x-cloak>
+          <h2 class="heading" style="margin-top:0;" x-text="cardEditor.editing ? 'Edit notes & tags' : 'Add notes & tags'"></h2>
+          <textarea x-model="cardEditor.note" placeholder="Write a note about this term…" aria-label="Card note"></textarea>
+          <label class="field-label caption" for="rc-tags">Tags</label>
+          <div class="input-tags">
+            <template x-for="t in cardEditor.tags" :key="t">
+              <span class="chip-tag">#<span x-text="t"></span><button class="x" @click="cardEditor.tags = cardEditor.tags.filter(x => x !== t)" :aria-label="'Remove tag ' + t">✕</button></span>
+            </template>
+            <input id="rc-tags" x-model="cardEditor.tagInput" list="all-tags"
+                   placeholder="Add a tag, space to confirm" aria-label="Add a tag"
+                   @keydown="onTagKeydown($event, 'card')">
+          </div>
+          <div class="editor-actions">
+            <button class="btn-text" x-show="cardEditor.editing" x-cloak @click="cancelCardNote()">CANCEL</button>
+            <button class="btn-primary" @click="saveCardEditor()">Save notes &amp; tags</button>
+          </div>
+        </div>
+
+        <!-- Existing notes — the saved card note + tags, then any highlights -->
+        <div x-show="resultCard() && (resultCard().note || resultCard().tags.length || resultCard().highlights.length)" x-cloak>
+          <h2 class="heading">Existing notes</h2>
           <div class="hl-item" x-show="resultCard()?.note || resultCard()?.tags.length">
             <div class="caption" style="margin-bottom:var(--space-sm);">Card note</div>
             <p class="note-text" x-show="resultCard()?.note" x-text="resultCard()?.note"></p>
             <div class="chip-row">
               <template x-for="t in (resultCard()?.tags || [])" :key="t"><span class="chip-tag" x-text="'#' + t"></span></template>
-              <button class="btn-text" @click="openCardDialog(resultCard().id)">EDIT</button>
+              <button class="btn-text" @click="editCardNote()">EDIT</button>
+              <button class="btn-text" @click="removeCardNote()">REMOVE</button>
             </div>
           </div>
           <template x-for="h in (resultCard()?.highlights || [])" :key="h.id">
@@ -305,6 +326,14 @@
       <button class="btn-outline" @click="nav('home')">Search Wikipedia</button>
     </div>
 
+    <!-- Filtered-to-zero: the collection isn't empty, the filters just exclude
+         everything. Without this the grid would blank out with no explanation. -->
+    <div class="state-box" x-show="cards.length && !visibleCards().length" x-cloak>
+      <p><b>No cards match your filters.</b></p>
+      <p>Try a different search, or clear your filters to see all <span x-text="cards.length"></span> cards.</p>
+      <button class="btn-outline" @click="clearCardFilters()">Clear all filters</button>
+    </div>
+
     <!-- Overview mode -->
     <div class="cards-grid" x-show="mode==='overview'">
       <template x-for="c in pagedCards()" :key="c.id">
@@ -383,10 +412,6 @@
         </div>
 
         <div class="session-card" :class="{ flipped: session.flipped }">
-          <button class="icon-btn star-btn" :class="{ starred: sessionCard().starred }"
-                  @click="toggleStar(sessionCard().id)"
-                  :aria-pressed="!!sessionCard().starred" aria-label="Star this card for another pass"
-                  x-text="sessionCard().starred ? '★' : '☆'"></button>
           <div class="flip-area" role="button" tabindex="0" @click="sessionFlip()"
                @keydown.enter.prevent="sessionFlip()"
                :aria-label="'Flip card: ' + sessionCard().title" :aria-pressed="session.flipped">
@@ -405,22 +430,37 @@
           </div>
         </div>
 
+        <!-- Verdict: reveal the answer, then judge it. Buttons stay disabled
+             until the card is flipped so you can't grade a face you haven't seen.
+             Advancing with → instead leaves no verdict — that's a skip. -->
+        <div class="verdict-row">
+          <button class="verdict-btn" :class="{ marked: session.verdicts[sessionCard().id] === 'wrong' }"
+                  :disabled="!session.flipped" @click="markVerdict('wrong')"
+                  :aria-pressed="session.verdicts[sessionCard().id] === 'wrong'" aria-label="Mark wrong">✗ Wrong</button>
+          <button class="verdict-btn" :class="{ marked: session.verdicts[sessionCard().id] === 'correct' }"
+                  :disabled="!session.flipped" @click="markVerdict('correct')"
+                  :aria-pressed="session.verdicts[sessionCard().id] === 'correct'" aria-label="Mark right">✓ Right</button>
+        </div>
+
         <div class="session-controls">
           <button class="icon-btn" @click="sessionPrev()" :disabled="session.idx === 0" aria-label="Previous card">←</button>
           <span class="caption" x-text="(session.idx + 1) + ' / ' + session.ids.length"></span>
           <button class="icon-btn" @click="sessionNext()"
-                  :aria-label="session.idx === session.ids.length - 1 ? 'Finish session' : 'Next card'">→</button>
+                  :aria-label="session.idx === session.ids.length - 1 ? 'Finish session' : 'Skip to next card'">→</button>
         </div>
       </div>
     </template>
 
-    <!-- Completion: only shown when starred cards earn a second pass -->
-    <div class="state-box" x-show="session.done" x-cloak>
-      <p><b>Session complete.</b></p>
-      <p x-text="'You starred ' + sessionStarredIds().length + ' card' + (sessionStarredIds().length === 1 ? '' : 's') + ' for another pass.'"></p>
-      <div style="display:flex;gap:var(--space-sm);justify-content:center;flex-wrap:wrap;">
-        <button class="btn-primary" @click="reviewStarredAgain()" x-text="'Review starred again (' + sessionStarredIds().length + ')'"></button>
-        <button class="btn-outline" @click="exitSession()">Back to collection</button>
+    <!-- Results: score + pass/fail once every card has been seen. Pass rule is
+         correct > wrong + skipped (a strict majority of the deck). -->
+    <div class="state-box session-result" x-show="session.done" x-cloak>
+      <p class="result-headline" x-text="sessionStats().passed ? '🎉 Congratulations, you passed!' : '✗ Not passed this time.'"></p>
+      <p x-text="'You got ' + sessionStats().correct + '/' + sessionStats().total + ' correct, and skipped ' + sessionStats().skipped + ' card' + (sessionStats().skipped === 1 ? '' : 's') + '.'"></p>
+      <div style="display:flex;gap:var(--space-sm);justify-content:center;flex-wrap:wrap;margin-top:var(--space-base);">
+        <button class="btn-primary" @click="restartSession()">Restart</button>
+        <button class="btn-outline" x-show="sessionStats().wrong + sessionStats().skipped" x-cloak @click="reviseMissed()"
+                x-text="'Revise wrong &amp; skipped (' + (sessionStats().wrong + sessionStats().skipped) + ')'"></button>
+        <button class="btn-text" @click="exitSession()">Back to collection</button>
       </div>
     </div>
 
@@ -439,7 +479,7 @@
           <span class="badge-source" x-cloak style="margin-top:0.75rem;" x-text="sourceLabel(currentCard().source)"></span>
           <span class="badge-drift" x-show="currentCard().drifted" x-cloak style="margin-top:0.75rem;">Updated on Wikipedia</span>
           <button class="icon-btn bookmark-btn saved" style="margin-left:auto;"
-                  @click="toggleSaveIcon('detail')" aria-label="Edit note and tags" aria-pressed="true">
+                  @click="toggleSaveIcon('detail')" aria-label="Remove from flashcards" aria-pressed="true">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4.5L5 21V4a1 1 0 0 1 1-1z"/></svg>
           </button>
         </div>
@@ -470,18 +510,39 @@
         <p class="credit" x-show="currentCard().source!=='dictionary'">via Wikipedia · text available under CC BY-SA · saved copy — never updates on its own</p>
         <p class="credit" x-show="currentCard().source==='dictionary'" x-cloak>Definitions via Free Dictionary API · synonyms via Datamuse · saved copy — never updates on its own</p>
 
-        <h2 class="heading">Highlights &amp; notes</h2>
-        <div class="hl-item" x-show="currentCard().note || currentCard().tags.length">
+        <!-- Add / edit notes & tags — inline card-level editor. Shown while the
+             card has no saved note yet, or when EDIT re-opens it. -->
+        <div class="note-editor" x-show="!(currentCard().note || currentCard().tags.length) || cardEditor.editing" x-cloak>
+          <h2 class="heading" style="margin-top:0;" x-text="cardEditor.editing ? 'Edit notes & tags' : 'Add notes & tags'"></h2>
+          <textarea x-model="cardEditor.note" placeholder="Write a note about this term…" aria-label="Card note"></textarea>
+          <label class="field-label caption" for="dc-tags">Tags</label>
+          <div class="input-tags">
+            <template x-for="t in cardEditor.tags" :key="t">
+              <span class="chip-tag">#<span x-text="t"></span><button class="x" @click="cardEditor.tags = cardEditor.tags.filter(x => x !== t)" :aria-label="'Remove tag ' + t">✕</button></span>
+            </template>
+            <input id="dc-tags" x-model="cardEditor.tagInput" list="all-tags"
+                   placeholder="Add a tag, space to confirm" aria-label="Add a tag"
+                   @keydown="onTagKeydown($event, 'card')">
+          </div>
+          <div class="editor-actions">
+            <button class="btn-text" x-show="cardEditor.editing" x-cloak @click="cancelCardNote()">CANCEL</button>
+            <button class="btn-primary" @click="saveCardEditor()">Save notes &amp; tags</button>
+          </div>
+        </div>
+
+        <h2 class="heading">Existing notes</h2>
+        <p class="muted" x-show="!currentCard().note && !currentCard().tags.length && !currentCard().highlights.length" style="font-family:var(--font-sans);">
+          Add a note above, or select any text in the summary to highlight it.
+        </p>
+        <div class="hl-item" x-show="currentCard().note || currentCard().tags.length" x-cloak>
           <div class="caption" style="margin-bottom:var(--space-sm);">Card note</div>
           <p class="note-text" x-show="currentCard().note" x-text="currentCard().note"></p>
           <div class="chip-row">
             <template x-for="t in currentCard().tags" :key="t"><span class="chip-tag" x-text="'#' + t"></span></template>
-            <button class="btn-text" @click="openCardDialog(currentCard().id)">EDIT</button>
+            <button class="btn-text" @click="editCardNote()">EDIT</button>
+            <button class="btn-text" @click="removeCardNote()">REMOVE</button>
           </div>
         </div>
-        <p class="muted" x-show="!currentCard().highlights.length && !currentCard().note && !currentCard().tags.length" style="font-family:var(--font-sans);">
-          Select any text in the summary above to highlight it — add a note and tags in the popup.
-        </p>
         <template x-for="(h, i) in currentCard().highlights" :key="h.id">
           <div class="hl-item">
             <blockquote x-text="'“' + h.text + '”'"></blockquote>
@@ -611,28 +672,6 @@
       <button class="btn-text" @click="deleteFromDialog()">DELETE</button>
       <button class="btn-text" @click="closeNoteDialog(false)">CANCEL</button>
       <button class="btn-text strong" @click="closeNoteDialog(true)">SAVE</button>
-    </div>
-  </div>
-</div>
-
-<!-- ============ CARD NOTE & TAGS DIALOG (bookmark icon) ============ -->
-<div class="scrim" x-show="cardDialog.show" x-cloak @click.self="closeCardDialog(false)" @keydown.escape.window="cardDialog.show && closeCardDialog(false)">
-  <div class="dialog" role="dialog" aria-modal="true" aria-label="Card note and tags" @keydown.tab="trapTab($event)">
-    <div class="head"><b x-text="cardDialogTitle()"></b><button class="btn-text" @click="closeCardDialog(false)" aria-label="Close">✕</button></div>
-    <textarea x-model="cardDialog.note" placeholder="Write a note about this term…" aria-label="Card note" x-ref="cardNoteText"></textarea>
-    <label class="field-label caption" for="card-tags">Tags</label>
-    <div class="input-tags">
-      <template x-for="t in cardDialog.tags" :key="t">
-        <span class="chip-tag">#<span x-text="t"></span><button class="x" @click="cardDialog.tags = cardDialog.tags.filter(x => x !== t)" :aria-label="'Remove tag ' + t">✕</button></span>
-      </template>
-      <input id="card-tags" x-model="cardDialog.tagInput" list="all-tags"
-             placeholder="Add a tag, space to confirm" aria-label="Add a tag"
-             @keydown="onTagKeydown($event, 'carddlg')">
-    </div>
-    <div class="actions">
-      <button class="btn-text" @click="deleteFromCardDialog()">DELETE</button>
-      <button class="btn-text" @click="closeCardDialog(false)">CANCEL</button>
-      <button class="btn-text strong" @click="closeCardDialog(true)">SAVE</button>
     </div>
   </div>
 </div>
