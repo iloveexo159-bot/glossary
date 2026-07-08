@@ -358,6 +358,19 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
   color: var(--color-text-primary); background: var(--color-surface);
   border: 1px solid var(--color-border-strong); border-radius: var(--rounded-md);
 }
+.verdict-btn {
+  display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.5rem 1.5rem;
+  font-family: var(--font-sans); font-size: var(--type-ui-size); font-weight: 700;
+  color: var(--color-text-primary); background: var(--color-surface);
+  border: 1px solid var(--color-border-strong); border-radius: var(--rounded-sm);
+}
+.verdict-btn.marked { background: var(--color-text-primary); color: var(--color-surface); border-color: var(--color-text-primary); }
+.note-editor { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--rounded-md); padding: var(--space-base); }
+.note-editor textarea {
+  width: 100%; min-height: 72px; resize: vertical; border: none; background: transparent;
+  font-family: var(--font-serif); font-size: var(--type-body-size); color: var(--color-text-primary);
+  border-bottom: 1px solid var(--color-border); padding: var(--space-sm) 0; margin-bottom: var(--space-md);
+}
 .toast {
   display: inline-flex; align-items: center; gap: var(--space-sm); padding: 0.75rem 1.25rem;
   background: var(--color-text-primary); color: var(--color-background);
@@ -533,23 +546,31 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
 
   <h3>Review session (focused mode)</h3>
   <div class="demo-block">
-    <div class="demo-label">session-card · large centered flip card · star top-left for another pass · shuffle + prev/next arrows + "n / total" · keyboard: arrows move, space flips</div>
+    <div class="demo-label">session-card · large centered whole-card flip · shuffle + prev/next arrows + "n / total" · keyboard: arrows move, space flips</div>
     <div class="demo-row" style="align-items:center;justify-content:space-between;">
       <span style="font-family:var(--font-sans);font-size:var(--type-caption-size);font-weight:700;letter-spacing:var(--type-caption-ls);text-transform:uppercase;color:var(--color-text-muted);">Review session · 12 cards</span>
       <button class="icon-btn" aria-label="Shuffle">⤨</button>
     </div>
     <div class="review-card" tabindex="0" style="position:relative;min-height:220px;">
-      <button class="icon-btn" aria-label="Star" style="position:absolute;top:0.5rem;left:0.5rem;">☆</button>
       <div class="term-big">Marketing</div>
       <div class="book-footer" style="padding:0;">Tap to reveal</div>
+    </div>
+    <div class="demo-label">verdict-btn · after the answer is revealed, mark the card · the chosen verdict fills (marked) · advancing with → instead is a skip</div>
+    <div class="demo-row" style="justify-content:center;gap:var(--space-base);">
+      <button class="verdict-btn">✗ Wrong</button>
+      <button class="verdict-btn marked">✓ Right</button>
     </div>
     <div class="demo-row" style="align-items:center;justify-content:center;gap:var(--space-lg);margin-top:var(--space-base);">
       <button class="icon-btn" aria-label="Previous">←</button>
       <span style="font-family:var(--font-sans);font-size:var(--type-caption-size);font-weight:700;letter-spacing:var(--type-caption-ls);text-transform:uppercase;color:var(--color-text-muted);">1 / 12</span>
-      <button class="icon-btn" aria-label="Next">→</button>
+      <button class="icon-btn" aria-label="Skip to next card">→</button>
     </div>
-    <div class="demo-label">completion · finishing with starred cards offers a starred-only second pass before returning to the collection</div>
-    <div class="demo-row"><button class="btn-primary">Review starred again (3)</button><button class="btn-outline">Back to collection</button></div>
+    <div class="demo-label">results · finishing scores the run (pass = correct &gt; wrong + skipped) and offers Restart or Revise (wrong + skipped)</div>
+    <div style="text-align:center;">
+      <p style="font-family:var(--font-serif);font-size:var(--type-heading-size);font-weight:700;margin-bottom:var(--space-sm);">🎉 Congratulations, you passed!</p>
+      <p style="font-family:var(--font-sans);color:var(--color-text-secondary);margin-bottom:var(--space-base);">You got 7/10 correct, and skipped 0 cards.</p>
+      <div class="demo-row" style="justify-content:center;"><button class="btn-primary">Restart</button><button class="btn-outline">Revise wrong &amp; skipped (3)</button><button class="btn-text">Back to collection</button></div>
+    </div>
   </div>
 
   <h3>Saving</h3>
@@ -563,22 +584,22 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
       </span>
       <span style="display:inline-flex;align-items:center;gap:var(--space-md);">
         <span style="font-family:var(--font-serif);font-size:var(--type-title-size);font-weight:700;">Great Wall</span>
-        <button class="bookmark-btn saved" aria-label="Saved — edit note and tags"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4.5L5 21V4a1 1 0 0 1 1-1z"/></svg></button>
+        <button class="bookmark-btn saved" aria-label="Remove from flashcards"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4.5L5 21V4a1 1 0 0 1 1-1z"/></svg></button>
         <span class="note">saved</span>
       </span>
     </div>
-    <div class="demo-label">dialog-card · opened by the bookmark · card-level note + tags, titled with the term</div>
-    <div class="note-dialog">
-      <div class="head"><b>Great Wall of China</b><button class="btn-text" style="min-height:auto;padding:0.25rem 0.5rem;" aria-label="Close">✕</button></div>
-      <textarea aria-label="Card note">Referenced in Chapter 2 — worth revisiting.</textarea>
+    <div class="demo-label">note-editor · inline "Add notes &amp; tags" block below the article · Save commits the note and clears the field</div>
+    <div class="note-editor">
+      <div style="font-family:var(--font-sans);font-size:var(--type-heading-size);font-weight:700;margin-bottom:var(--space-md);">Add notes &amp; tags</div>
+      <textarea aria-label="Card note" placeholder="Write a note about this term…"></textarea>
       <label class="field-label" for="card-tags-demo">Tags</label>
       <div class="input-tags">
         <span class="chip-tag removable">#history <button class="x" aria-label="Remove tag history">✕</button></span>
         <input id="card-tags-demo" placeholder="Add a tag, space to confirm" aria-label="Add a tag">
       </div>
-      <div class="actions" style="margin-top:var(--space-md);"><button class="btn-text">DELETE</button><button class="btn-text">CANCEL</button><button class="btn-text" style="color:var(--color-text-primary);">SAVE</button></div>
+      <div class="actions" style="margin-top:var(--space-md);justify-content:flex-end;"><button class="btn-primary">Save notes &amp; tags</button></div>
     </div>
-    <div class="demo-label">saved-item-card · one white container for the card note and every highlight, under "Highlights &amp; notes"</div>
+    <div class="demo-label">saved-item-card · one white container for the card note and every highlight, under "Existing notes" · each with EDIT / REMOVE</div>
     <div class="saved-item-card">
       <div style="font-family:var(--font-sans);font-size:var(--type-caption-size);font-weight:700;letter-spacing:var(--type-caption-ls);text-transform:uppercase;color:var(--color-text-muted);margin-bottom:var(--space-sm);">Card note</div>
       <p class="note-text">Referenced in Chapter 2 — worth revisiting.</p>
@@ -640,9 +661,9 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
     <div class="demo-label">dictionary result affordances · IPA + play (audio only when the API returns it), and tappable synonym chips that each launch a fresh lookup</div>
     <div class="demo-row"><span class="pronounce"><span class="phonetic">/ˈɪɡnəˌmɪni/</span><button class="btn-text">🔊 Play</button></span></div>
     <div class="demo-row"><span class="syn-chip">disgrace</span><span class="syn-chip">shame</span><span class="syn-chip">scandal</span></div>
-    <div class="demo-label">dict-option · the dictionary offered above Wikipedia's candidates on a disambiguation page</div>
+    <div class="demo-label">dict-option · the dictionary offered above Wikipedia's candidates on a disambiguation page · a disambiguation with no usable candidates falls through to the dictionary (or the no-result screen), never a dead-end</div>
     <div class="demo-row"><button class="dict-option"><span class="src-tag">Dictionary</span><span>See the definition of "ignominy"</span></button></div>
-    <div class="demo-label">toast · save confirmation, bottom-center, auto-dismisses</div>
+    <div class="demo-label">toast · save confirmation, bottom-center, auto-dismisses · also the failure signal — a write that can't persist is rolled back and the toast warns instead of falsely confirming</div>
     <div class="demo-row"><span class="toast">✓ Saved to flashcards</span></div>
   </div>
 
@@ -673,7 +694,7 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
     </div>
   </div>
 
-  <p class="note" style="margin-top:var(--space-2xl);">Glossary design system · mirror of docs/design.md · derived from PRD_WikiSearch_MVP.md + raw-design-system.fig only · updated 2026-07-06</p>
+  <p class="note" style="margin-top:var(--space-2xl);">Glossary design system · mirror of docs/design.md · derived from PRD_WikiSearch_MVP.md + raw-design-system.fig only · updated 2026-07-08</p>
 </main>
 
 <script>
