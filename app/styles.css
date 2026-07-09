@@ -36,7 +36,7 @@
 }
 :root {
   --user-font-scale: 1;
-  --reading-brightness: 1;
+  --reading-dim: 0;
   --reading-warmth: 0;
   --font-serif: 'Literata', Georgia, serif;
   --font-sans: 'Mulish', system-ui, sans-serif;
@@ -69,7 +69,10 @@ body {
   font-family: var(--font-sans);
   font-size: var(--type-body-size);
   line-height: var(--type-body-lh);
-  filter: brightness(var(--reading-brightness));
+  /* NO filter here, ever: any filter (even brightness(1)) makes <body> the
+     containing block for position:fixed descendants — the bottom nav, toast,
+     and dialog scrim would anchor to the END OF THE DOCUMENT instead of the
+     viewport. Brightness dimming lives on #dim-overlay instead. */
   transition: background .15s, color .15s;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -86,6 +89,11 @@ body {
 #warmth-overlay {
   position: fixed; inset: 0; pointer-events: none; z-index: 999;
   background: #E0B464; opacity: var(--reading-warmth); mix-blend-mode: multiply;
+}
+/* Brightness control — replaces the retired body filter (see body rule) */
+#dim-overlay {
+  position: fixed; inset: 0; pointer-events: none; z-index: 999;
+  background: #000; opacity: var(--reading-dim);
 }
 
 button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visible,
@@ -226,6 +234,11 @@ main { max-width: 900px; margin: 0 auto; padding: var(--space-lg) var(--space-ba
 .btn-text.strong { color: var(--color-text-primary); }
 .btn-text:disabled { opacity: 0.35; cursor: default; }
 .btn-text:disabled:hover { background: transparent; color: var(--color-text-secondary); }
+/* The selection-bar verbs disable at zero selected — same dimming as btn-text */
+.btn-primary:disabled { opacity: 0.35; cursor: default; }
+.btn-primary:disabled:hover { background: var(--color-text-primary); }
+.btn-outline:disabled { opacity: 0.35; cursor: default; }
+.btn-outline:disabled:hover { background: transparent; color: var(--color-text-primary); }
 
 /* ---------- Results ---------- */
 /* height:auto keeps the aspect ratio from the width/height attributes when
@@ -251,6 +264,8 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
 }
 .credit { font-family: var(--font-sans); font-size: var(--type-caption-size); color: var(--color-text-muted); margin-top: var(--space-base); }
 .result-actions { display: flex; gap: var(--space-base); align-items: center; margin-top: var(--space-lg); flex-wrap: wrap; }
+/* Rule between the card-level actions and the notes area below them */
+.section-rule { border: none; border-top: 1px solid var(--color-border); margin: var(--space-lg) 0; }
 .state-box { text-align: center; padding: var(--space-2xl) var(--space-base); color: var(--color-text-secondary); }
 .candidates .row {
   display: block; width: 100%; text-align: left; background: var(--color-surface);
@@ -298,6 +313,15 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
 }
 .select-bar-count { margin-right: auto; }
 .select-bar-actions { display: flex; align-items: center; gap: var(--space-xs); flex-wrap: wrap; }
+.select-bar-verbs { display: flex; align-items: center; gap: var(--space-sm); flex-wrap: wrap; }
+/* Narrow screens: the selection bar sticks just below the top bar — the verbs
+   stay visible at the top of the screen while the grid scrolls underneath. */
+@media (max-width: 640px) {
+  .select-bar {
+    position: sticky; top: 3.5rem; z-index: 19;
+    box-shadow: var(--shadow-md);
+  }
+}
 .mode-toggle { display: inline-flex; border: 1px solid var(--color-border-strong); border-radius: var(--rounded-full); overflow: hidden; }
 .mode-toggle button {
   background: transparent; border: none; cursor: pointer; padding: 0.375rem 1rem;
@@ -306,9 +330,34 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
 .mode-toggle button.active { background: var(--color-text-primary); color: var(--color-background); }
 .mode-toggle-sm button { padding: 0.25rem 0.75rem; }
 
-/* ---------- Filter rows (collection page) ---------- */
-.filters-row { display: flex; align-items: center; gap: var(--space-lg); flex-wrap: wrap; margin-bottom: var(--space-md); }
-.filter-group { display: flex; align-items: center; gap: var(--space-sm); }
+/* ---------- Filters (collection page) ----------
+   The filter rows used to sit inline and ate half a phone screen; they now
+   live in a pop-out panel opened from a fixed-size funnel icon (a text chip
+   that grew with its count used to reflow the toolbar). Same design on every
+   viewport: one labeled row per filter dimension. */
+.filters-toggle { position: relative; }
+.filters-toggle[aria-expanded="true"] { outline: 2px solid var(--color-text-primary); outline-offset: 1px; color: var(--color-text-primary); }
+.filter-badge {
+  position: absolute; top: 1px; right: 1px;
+  min-width: 1.125rem; height: 1.125rem; padding: 0 0.25rem;
+  border-radius: var(--rounded-full);
+  background: var(--color-text-primary); color: var(--color-background);
+  font-size: var(--type-caption-size); font-weight: 700; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.filters-panel {
+  display: flex; flex-direction: column; gap: var(--space-md);
+  margin-bottom: var(--space-lg); padding: var(--space-base);
+  background: var(--color-surface); border: 1px solid var(--color-border-strong);
+  border-radius: var(--rounded-md); box-shadow: var(--shadow-sm);
+}
+.filter-group { display: flex; align-items: center; gap: var(--space-md); }
+/* aligned label column: every dimension reads as one row of the same table */
+.filters-panel .filter-group > .caption { flex: 0 0 4.5rem; }
+.filters-panel-foot {
+  display: flex; justify-content: flex-end; gap: var(--space-sm);
+  border-top: 1px solid var(--color-border); padding-top: var(--space-sm);
+}
 .cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: var(--space-base); }
 .pager {
   display: flex; align-items: center; justify-content: center;
@@ -396,7 +445,18 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
 .session-card {
   position: relative; display: flex; flex-direction: column;
   text-align: center; perspective: 1200px;
+  /* swipe: horizontal drags are ours, vertical pans stay with the browser.
+     The transition animates the snap-back and the fling-out; the live drag
+     itself sets transition:none inline so the card tracks the finger 1:1. */
+  touch-action: pan-y;
+  transition: transform 240ms ease, opacity 240ms ease;
 }
+/* Tinder-style fling: off-screen with a rotation in the throw direction */
+.session-card.swipe-out-left  { transform: translateX(-120%) rotate(-16deg); opacity: 0; }
+.session-card.swipe-out-right { transform: translateX(120%)  rotate(16deg);  opacity: 0; }
+/* Incoming card's start frame — held for one frame, then released so the
+   transition plays it rising to rest */
+.session-card.swipe-in { transform: scale(0.92); opacity: 0; transition: none; }
 .session-card .flip-area { min-height: min(52vh, 420px); }
 .session-card:hover .face { border-color: var(--color-border-strong); }
 .session-card .summary {
@@ -508,7 +568,9 @@ input[type="range"] { accent-color: var(--color-text-primary); width: min(240px,
 /* ---------- Bottom nav (mobile) ---------- */
 .nav-bottom {
   position: fixed; bottom: 0; left: 0; right: 0; z-index: 40;
-  display: none; height: 3.5rem;
+  display: none; height: calc(3.5rem + env(safe-area-inset-bottom));
+  /* iPhone home-indicator: the bar extends under it, links stay above it */
+  padding-bottom: env(safe-area-inset-bottom);
   background: var(--color-surface); border-top: 1px solid var(--color-border);
 }
 .nav-bottom a {
@@ -525,11 +587,12 @@ input[type="range"] { accent-color: var(--color-text-primary); width: min(240px,
   .btn-text { min-height: max(2.75rem, 44px); }
   .icon-clear { padding: 0.625rem 0.75rem; }
   .chip-filter { padding: 0.625rem 0.875rem; }
+  .sel-toolbar button { min-height: max(2.75rem, 44px); }
 }
 
 /* ---------- Toast / badges ---------- */
 .toast {
-  position: fixed; bottom: 4.5rem; left: 50%; transform: translateX(-50%); z-index: 80;
+  position: fixed; bottom: calc(4.5rem + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); z-index: 80;
   display: inline-flex; align-items: center; gap: var(--space-sm); padding: 0.75rem 1.25rem;
   background: var(--color-text-primary); color: var(--color-background);
   font-family: var(--font-sans); font-size: var(--type-label-size); font-weight: 600;

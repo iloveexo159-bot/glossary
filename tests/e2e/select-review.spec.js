@@ -1,10 +1,10 @@
 /* Focused review sessions (Create review session → select → #/review) plus
    the collection filters and the search box resetting between pages. */
 const { test, expect } = require('@playwright/test');
-const { openApp, hashTo, seedCard } = require('./helpers');
+const { openApp, hashTo, seedCard, openFilters } = require('./helpers');
 
 async function startSessionOf(page, count) {
-  await page.getByRole('button', { name: 'Review', exact: true }).click();
+  await page.getByRole('button', { name: 'Select', exact: true }).click();
   await page.getByRole('button', { name: 'Select all', exact: true }).click();
   await page.getByRole('button', { name: `Review (${count})`, exact: true }).click();
   await expect(page).toHaveURL(/#\/review/);
@@ -18,6 +18,7 @@ test('tag filter → create review session → flip, advance, and finish back at
   ] });
   await hashTo(page, '#/cards');
 
+  await openFilters(page);
   await page.getByRole('button', { name: '#physics', exact: true }).click();
   await startSessionOf(page, 2);
   await expect(page.locator('.session-controls')).toContainText('1 / 2');
@@ -26,7 +27,7 @@ test('tag filter → create review session → flip, advance, and finish back at
   await card.locator('.flip-area').click(); // reveal the answer
   await expect(card).toHaveClass(/flipped/);
 
-  await page.getByRole('button', { name: 'Skip to next card' }).click();
+  await page.getByRole('button', { name: 'Next card' }).click();
   await expect(page.locator('.session-controls')).toContainText('2 / 2');
   await expect(card).not.toHaveClass(/flipped/); // advancing resets the flip
 
@@ -45,10 +46,12 @@ test('Right/Wrong verdicts produce a pass/fail result with Restart and Revise', 
   await hashTo(page, '#/cards');
   await startSessionOf(page, 2);
 
-  // card 1: reveal, then mark Right (buttons are disabled until the card is flipped)
+  // card 1: reveal, mark Right (buttons are disabled until the card is
+  // flipped) — the verdict rides the fling animation to card 2
   await page.locator('.session-card .flip-area').click();
   await page.getByRole('button', { name: 'Mark right' }).click();
-  // card 2: reveal, then mark Wrong — the last card finishes the session
+  await expect(page.locator('.session-controls')).toContainText('2 / 2');
+  // card 2: reveal, mark Wrong — the last card's fling finishes the session
   await page.locator('.session-card .flip-area').click();
   await page.getByRole('button', { name: 'Mark wrong' }).click();
 
@@ -88,7 +91,7 @@ test('flashcards-mode select box is clickable (regression: checkbox was a dead z
   await page.getByRole('button', { name: 'Flashcards', exact: true }).click();
 
   // enter selection mode — the checkbox appears on each flip card
-  await page.getByRole('button', { name: 'Review', exact: true }).click();
+  await page.getByRole('button', { name: 'Select', exact: true }).click();
   const firstCard = page.locator('.review-card').first();
 
   // clicking the checkbox ITSELF must select the card. It sits outside .flip-area
@@ -98,6 +101,17 @@ test('flashcards-mode select box is clickable (regression: checkbox was a dead z
   await expect(page.getByRole('button', { name: 'Review (1)', exact: true })).toBeVisible();
 });
 
+test('the session card can be starred mid-review and it persists', async ({ page }) => {
+  await openApp(page, { seed: [seedCard({ id: 'a', title: 'Atom' })] });
+  await hashTo(page, '#/cards');
+  await startSessionOf(page, 1);
+
+  await page.locator('.session-card .star-btn').click();
+  await expect(page.locator('.session-card .star-btn')).toHaveText('★');
+  const starred = await page.evaluate(() => JSON.parse(localStorage.getItem('glossary.cards'))[0].starred);
+  expect(starred).toBe(true);
+});
+
 test('segmented status filter separates reviewed from unreviewed cards', async ({ page }) => {
   await openApp(page, { seed: [
     seedCard({ id: 'r', title: 'Atom', lastReviewedAt: Date.now() }),
@@ -105,6 +119,7 @@ test('segmented status filter separates reviewed from unreviewed cards', async (
   ] });
   await hashTo(page, '#/cards');
 
+  await openFilters(page);
   const reviewedGroup = page.getByRole('group', { name: 'Reviewed filter' });
   await reviewedGroup.getByRole('button', { name: 'No', exact: true }).click();
   await expect(page.locator('.flashcard .term')).toHaveText('Cell');
@@ -122,6 +137,7 @@ test('multiple tag chips select together (OR)', async ({ page }) => {
   ] });
   await hashTo(page, '#/cards');
 
+  await openFilters(page);
   await page.getByRole('button', { name: '#physics', exact: true }).click();
   await page.getByRole('button', { name: '#biology', exact: true }).click();
   await expect(page.locator('.flashcard')).toHaveCount(2);

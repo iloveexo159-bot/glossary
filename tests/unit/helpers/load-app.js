@@ -40,6 +40,7 @@ function createContext() {
     console,
     setTimeout,
     clearTimeout,
+    requestAnimationFrame: (fn) => setTimeout(fn, 16),
     localStorage: makeStorage(),
     navigator: { onLine: true },
     location: { hash: '' },
@@ -62,6 +63,9 @@ function createContext() {
       createElement: () => ({ style: {}, click: noop, remove: noop, setAttribute: noop, appendChild: noop }),
       body: { appendChild: noop, removeChild: noop },
       createRange: () => ({}),
+      addEventListener: noop,
+      querySelector: () => null,
+      querySelectorAll: () => [],
     },
   };
   sandbox.globalThis = sandbox;

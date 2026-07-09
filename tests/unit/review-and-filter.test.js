@@ -140,13 +140,41 @@ test('a review session walks the selected cards, marks them reviewed, and ends o
   assert.deepEqual(Array.from(comp.session.ids), ['a', 'c'], 'deck retained for Restart/Revise');
 });
 
+test('marking a verdict records it, then rides the fling to the next card', async () => {
+  const comp = newComp();
+  comp._flingMs = 0; // deterministic: fling resolves on the next timer tick
+  comp.cards = [card({ id: 'a' }), card({ id: 'b' })];
+  comp.startSession(['a', 'b']);
+  comp.sessionFlip();
+  comp.markVerdict('wrong');
+  assert.equal(comp.session.verdicts.a, 'wrong', 'verdict recorded immediately');
+  assert.equal(comp.session.idx, 0, 'still on the card while the fling plays');
+  await new Promise(r => setTimeout(r, 10));
+  assert.equal(comp.session.idx, 1, 'advanced once the fling landed');
+  assert.equal(comp.session.flipped, false, 'next card arrives face down');
+});
+
+test('marking a verdict on the last card finishes the session', async () => {
+  const comp = newComp();
+  comp._flingMs = 0;
+  comp.cards = [card({ id: 'a' })];
+  comp.startSession(['a']);
+  comp.sessionFlip();
+  comp.markVerdict('correct');
+  await new Promise(r => setTimeout(r, 10));
+  assert.equal(comp.session.done, true);
+  assert.equal(comp.sessionStats().correct, 1);
+});
+
 test('verdicts feed the score; advancing without judging is a skip', () => {
   const comp = newComp();
   comp.cards = [card({ id: 'a' }), card({ id: 'b' }), card({ id: 'c' })];
   comp.startSession(['a', 'b', 'c']);
-  comp.sessionFlip(); comp.markVerdict('correct'); // a → Right, advances to b
-  comp.sessionNext();                              // b skipped
-  comp.sessionFlip(); comp.markVerdict('wrong');   // c → Wrong (last → finishes)
+  // verdicts assigned directly: markVerdict's fling-advance is async and has
+  // its own test above — these tests target the scoring rules only
+  comp.session.verdicts.a = 'correct'; comp.sessionNext();
+  comp.sessionNext();                                       // b skipped
+  comp.session.verdicts.c = 'wrong'; comp.sessionNext();    // last → finishes
   assert.equal(comp.session.done, true);
   // spread into the test realm: the vm sandbox gives app objects a different
   // Object.prototype, which deepStrictEqual rejects across realms
@@ -158,15 +186,15 @@ test('pass rule is a strict majority: correct must exceed wrong + skipped', () =
   comp.cards = [card({ id: 'a' }), card({ id: 'b' }), card({ id: 'c' })];
   // 2 correct, 1 skipped → 2 > 1 → pass
   comp.startSession(['a', 'b', 'c']);
-  comp.sessionFlip(); comp.markVerdict('correct');
-  comp.sessionFlip(); comp.markVerdict('correct');
+  comp.session.verdicts.a = 'correct'; comp.sessionNext();
+  comp.session.verdicts.b = 'correct'; comp.sessionNext();
   comp.sessionNext(); // skip the last
   assert.equal(comp.sessionStats().passed, true, '2 correct vs 1 skipped passes');
 
   // 1 correct, 1 wrong, 1 skipped → 1 > 2 is false → fail
   comp.startSession(['a', 'b', 'c']);
-  comp.sessionFlip(); comp.markVerdict('correct');
-  comp.sessionFlip(); comp.markVerdict('wrong');
+  comp.session.verdicts.a = 'correct'; comp.sessionNext();
+  comp.session.verdicts.b = 'wrong'; comp.sessionNext();
   comp.sessionNext();
   assert.equal(comp.sessionStats().passed, false, 'skips count against a pass');
 });
@@ -175,9 +203,9 @@ test('Revise restarts with the wrong AND skipped cards and clears verdicts', () 
   const comp = newComp();
   comp.cards = [card({ id: 'a' }), card({ id: 'b' }), card({ id: 'c' })];
   comp.startSession(['a', 'b', 'c']);
-  comp.sessionFlip(); comp.markVerdict('correct'); // a correct
-  comp.sessionNext();                              // b skipped
-  comp.sessionFlip(); comp.markVerdict('wrong');   // c wrong → finishes
+  comp.session.verdicts.a = 'correct'; comp.sessionNext(); // a correct
+  comp.sessionNext();                                      // b skipped
+  comp.session.verdicts.c = 'wrong'; comp.sessionNext();   // c wrong → finishes
   comp.reviseMissed();
   assert.deepEqual(Array.from(comp.session.ids).sort(), ['b', 'c'], 'wrong + skipped both return');
   assert.equal(comp.session.done, false);
@@ -188,8 +216,8 @@ test('Restart replays the whole deck and clears verdicts', () => {
   const comp = newComp();
   comp.cards = [card({ id: 'a' }), card({ id: 'b' })];
   comp.startSession(['a', 'b']);
-  comp.sessionFlip(); comp.markVerdict('correct');
-  comp.sessionFlip(); comp.markVerdict('wrong'); // finishes
+  comp.session.verdicts.a = 'correct'; comp.sessionNext();
+  comp.session.verdicts.b = 'wrong'; comp.sessionNext(); // finishes
   comp.restartSession();
   assert.deepEqual(Array.from(comp.session.ids).sort(), ['a', 'b']);
   assert.equal(comp.session.done, false);
@@ -237,22 +265,39 @@ test('selectAllVisible picks the filtered set; clearSelection empties it', () =>
   assert.deepEqual(Array.from(comp.selected), []);
 });
 
-test('launchSelection routes by intent: review starts a session, export opens the sheet', () => {
+test('selection verbs: reviewSelected starts a session, exportSelected opens the sheet', () => {
   const comp = newComp();
   comp.cards = [card({ id: 'a' }), card({ id: 'b' })];
-
-  comp.selectIntent = 'review';
   comp.selected = ['a', 'b'];
-  comp.launchSelection();
-  assert.deepEqual(Array.from(comp.session.ids), ['a', 'b'], 'review intent launches the session');
+  comp.reviewSelected();
+  assert.deepEqual(Array.from(comp.session.ids), ['a', 'b'], 'review launches the session');
   assert.equal(comp.selectMode, false, 'launching leaves selection mode');
 
   const comp2 = newComp();
   comp2.cards = [card({ id: 'a' })];
-  comp2.selectIntent = 'export';
+  comp2.exportSelected();
+  assert.equal(comp2.exportSheet, false, 'empty selection is a no-op');
   comp2.selected = ['a'];
-  comp2.launchSelection();
-  assert.equal(comp2.exportSheet, true, 'export intent opens the export sheet');
+  comp2.exportSelected();
+  assert.equal(comp2.exportSheet, true, 'export opens the export sheet');
+});
+
+test('deleteSelected removes the picked cards after confirm, and only then', () => {
+  const comp = newComp();
+  comp.cards = [card({ id: 'a' }), card({ id: 'b' }), card({ id: 'c' })];
+  comp.selectMode = true;
+  comp.selected = ['a', 'c'];
+
+  comp._ctx.confirm = () => false; // user backs out — nothing changes
+  comp.deleteSelected();
+  assert.equal(comp.cards.length, 3, 'declining the confirm keeps every card');
+  assert.equal(comp.selectMode, true, 'declining stays in selection mode');
+
+  comp._ctx.confirm = () => true;
+  comp.deleteSelected();
+  assert.deepEqual(comp.cards.map(c => c.id), ['b'], 'confirmed delete removes exactly the picked cards');
+  assert.equal(comp.selectMode, false, 'delete exits selection mode');
+  assert.deepEqual(Array.from(comp.selected), [], 'selection is cleared');
 });
 
 test('allTags returns a de-duplicated, sorted union of all tags', () => {

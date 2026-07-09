@@ -30,4 +30,16 @@ function seedCard(over = {}) {
   };
 }
 
-module.exports = { openApp, hashTo, seedCard };
+/* The collection filters collapse behind a "Filters" chip on narrow viewports.
+   Call before interacting with filter controls — a no-op on desktop, where the
+   toggle is hidden and the filters are always open. */
+async function openFilters(page) {
+  // isVisible() doesn't auto-wait, and this often runs right after a hash
+  // navigation — anchor on the toolbar (present on every viewport) so the
+  // cards page has actually rendered before we probe the toggle.
+  await page.locator('.cards-toolbar .mode-toggle').waitFor({ state: 'visible' });
+  const toggle = page.locator('.filters-toggle');
+  if (await toggle.isVisible()) await toggle.click();
+}
+
+module.exports = { openApp, hashTo, seedCard, openFilters };

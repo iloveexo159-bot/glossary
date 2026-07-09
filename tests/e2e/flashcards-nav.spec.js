@@ -1,6 +1,6 @@
 /* Journey: browse / revise (PRD §3 "Revise/study") + reverse navigation. */
 const { test, expect } = require('@playwright/test');
-const { openApp, hashTo, seedCard } = require('./helpers');
+const { openApp, hashTo, seedCard, openFilters } = require('./helpers');
 
 test('empty flashcards page shows the new-user empty state', async ({ page }) => {
   await openApp(page);
@@ -46,6 +46,7 @@ test('tag filter narrows the visible cards', async ({ page }) => {
   ] });
   await hashTo(page, '#/cards');
   await expect(page.locator('.flashcard')).toHaveCount(2);
+  await openFilters(page);
   await page.getByRole('button', { name: '#physics', exact: true }).click();
   await expect(page.locator('.flashcard')).toHaveCount(1);
   await expect(page.locator('.flashcard .term')).toHaveText('Atom');

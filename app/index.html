@@ -2,7 +2,7 @@
 <html lang="en" data-theme="light">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com 'unsafe-eval'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' https://upload.wikimedia.org; connect-src https://en.wikipedia.org https://upload.wikimedia.org https://api.dictionaryapi.dev https://api.datamuse.com; media-src https://api.dictionaryapi.dev; base-uri 'none'; form-action 'none'; object-src 'none'">
 <title>Glossary</title>
@@ -16,6 +16,7 @@
 </head>
 <body x-data="glossaryApp()" x-init="init()" @keydown.window="onKeydown($event)" @click="closeTransient($event)">
 <div id="warmth-overlay"></div>
+<div id="dim-overlay"></div>
 
 <!-- ============ TOP BAR (contextual) ============ -->
 <!-- Bar spans the screen; its contents share the same centered column as <main>
@@ -196,6 +197,10 @@
                 x-text="alreadySaved() ? 'Add notes & tags below, or select text to highlight' : 'Tap the bookmark to save, or select text to highlight & save'"></span>
         </div>
 
+        <!-- Rule between the card-level actions and the notes area — the two
+             blocks only coexist once the card is saved -->
+        <hr class="section-rule" x-show="resultCard()" x-cloak>
+
         <!-- Add / edit notes & tags — inline card-level editor. Shown while the
              card has no saved note yet, or when EDIT re-opens it. Saving clears
              the input; the note then appears under "Existing notes" below. -->
@@ -266,31 +271,54 @@
         <button :class="{ active: mode==='overview' }" :aria-pressed="mode==='overview'" @click="setMode('overview')">Overview</button>
         <button :class="{ active: mode==='flashcards' }" :aria-pressed="mode==='flashcards'" @click="setMode('flashcards')">Flashcards</button>
       </div>
-      <!-- Two doors into selection: Review and Export. Each declares intent up
-           front, so the selection bar shows exactly one launch verb. -->
-      <div class="toolbar-right" x-show="!selectMode && cards.length" x-cloak>
-        <button class="btn-primary" @click="toggleSelectMode('review')">Review</button>
-        <button class="btn-outline" @click="toggleSelectMode('export')">Export</button>
+      <!-- Right cluster: filter disclosure + Select. The filter control is a
+           FIXED-SIZE icon button (a growing text chip used to reflow the row
+           and push Select out of line); the active-filter count rides on a
+           badge instead of widening the control. -->
+      <div class="toolbar-right" x-show="cards.length" x-cloak>
+        <button class="icon-btn filters-toggle" :aria-expanded="filtersOpen"
+                aria-label="Filters" title="Filters" @click="filtersOpen = !filtersOpen">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <line x1="4" y1="7" x2="20" y2="7"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="10" y1="17" x2="14" y2="17"/>
+          </svg>
+          <span class="filter-badge" x-show="activeFilterCount()" x-cloak
+                x-text="activeFilterCount()"
+                :aria-label="activeFilterCount() + ' active filters'"></span>
+        </button>
+        <!-- One door into selection: Select. The selection bar then offers every
+             verb (Review / Export / Delete) with a clear visual hierarchy. -->
+        <button class="btn-outline" x-show="!selectMode" @click="toggleSelectMode()">Select</button>
       </div>
     </div>
 
     <!-- Selection action bar (own row) — appears only while picking cards.
-         Keeps the browse toolbar stable; gives the management verbs room. -->
+         Verb hierarchy: Review (primary, most common) → Export (outline) →
+         Delete (text, confirm-guarded — lowest weight so it's never the
+         accidental tap). All three disable until something is picked.
+         On narrow screens the bar floats above the bottom nav (see CSS). -->
     <div class="select-bar" x-show="selectMode" x-cloak>
-      <span class="caption select-bar-count"
-            x-text="selected.length + ' selected · ' + (selectIntent==='review' ? 'Review' : 'Export')"></span>
+      <span class="caption select-bar-count" x-text="selected.length + ' selected'"></span>
       <div class="select-bar-actions">
         <button class="btn-text" @click="selectAllVisible()">Select all</button>
         <button class="btn-text" @click="clearSelection()" :disabled="!selected.length">Clear</button>
         <button class="btn-text" @click="toggleSelectMode()">Cancel</button>
-        <button class="btn-primary" x-show="selected.length" x-cloak @click="launchSelection()"
-                x-text="(selectIntent==='review' ? 'Review (' : 'Export (') + selected.length + ')'"></button>
+      </div>
+      <div class="select-bar-verbs">
+        <button class="btn-text" :disabled="!selected.length" @click="deleteSelected()"
+                x-text="'Delete' + (selected.length ? ' (' + selected.length + ')' : '')"></button>
+        <button class="btn-outline" :disabled="!selected.length" @click="exportSelected()"
+                x-text="'Export' + (selected.length ? ' (' + selected.length + ')' : '')"></button>
+        <button class="btn-primary" :disabled="!selected.length" @click="reviewSelected()"
+                x-text="'Review' + (selected.length ? ' (' + selected.length + ')' : '')"></button>
       </div>
     </div>
 
-    <!-- Status filters: two binary questions, two compact segmented toggles.
-         AND semantics with tags, star, and text search. -->
-    <div class="filters-row" x-show="cards.length">
+    <!-- Filters pop-out panel — a contained surface card (same family as the
+         selection bar), opened from the funnel icon on every viewport. One
+         labeled row per filter dimension gives the hierarchy the old inline
+         rows lacked; Starred is a dimension like the others, not a stray chip.
+         AND semantics across rows; tags OR within their row. -->
+    <div class="filters-panel" x-show="filtersOpen && cards.length" x-cloak>
       <div class="filter-group" role="group" aria-label="Reviewed filter">
         <span class="caption">Reviewed</span>
         <div class="mode-toggle mode-toggle-sm">
@@ -307,17 +335,26 @@
           <button :class="{ active: exportedFilter==='no' }" :aria-pressed="exportedFilter==='no'" @click="exportedFilter='no'">No</button>
         </div>
       </div>
-      <button class="chip-filter" :class="{ active: starFilter }" @click="starFilter = !starFilter"
-              :aria-pressed="starFilter">★ Starred</button>
-    </div>
-
-    <!-- Tag chips: multi-select, OR within the row -->
-    <div class="chip-row" style="margin-bottom:var(--space-lg);" x-show="allTags().length">
-      <span class="caption" style="align-self:center;">Tags</span>
-      <button class="chip-filter" :class="{ active: tagFilters.length === 0 }" @click="tagFilters = []">All</button>
-      <template x-for="t in allTags()" :key="t">
-        <button class="chip-filter" :class="{ active: tagFilters.includes(t) }" @click="toggleTagFilter(t)" x-text="'#' + t"></button>
-      </template>
+      <div class="filter-group" role="group" aria-label="Starred filter">
+        <span class="caption">Starred</span>
+        <div class="mode-toggle mode-toggle-sm">
+          <button :class="{ active: !starFilter }" :aria-pressed="!starFilter" @click="starFilter = false">All</button>
+          <button :class="{ active: starFilter }" :aria-pressed="starFilter" @click="starFilter = true">★ Starred</button>
+        </div>
+      </div>
+      <div class="filter-group" x-show="allTags().length">
+        <span class="caption">Tags</span>
+        <div class="chip-row">
+          <button class="chip-filter" :class="{ active: tagFilters.length === 0 }" @click="tagFilters = []">All</button>
+          <template x-for="t in allTags()" :key="t">
+            <button class="chip-filter" :class="{ active: tagFilters.includes(t) }" @click="toggleTagFilter(t)" x-text="'#' + t"></button>
+          </template>
+        </div>
+      </div>
+      <div class="filters-panel-foot">
+        <button class="btn-text" x-show="activeFilterCount()" x-cloak @click="clearCardFilters()">Clear all</button>
+        <button class="btn-text strong" @click="filtersOpen = false">Done</button>
+      </div>
     </div>
 
     <div class="state-box" x-show="cards.length === 0">
@@ -411,7 +448,23 @@
           </button>
         </div>
 
-        <div class="session-card" :class="{ flipped: session.flipped }">
+        <!-- Touch: the card follows the finger (tinder-style) — left = next,
+             right = previous. Vertical pans stay with the browser (pan-y). -->
+        <div class="session-card" :style="swipeStyle()"
+             :class="{ flipped: session.flipped,
+                       'swipe-out-left': swipe.anim==='out-left',
+                       'swipe-out-right': swipe.anim==='out-right',
+                       'swipe-in': swipe.anim==='in' }"
+             @touchstart.passive="swipeStart($event)"
+             @touchmove.passive="swipeMove($event)"
+             @touchend.passive="swipeEnd()" @touchcancel.passive="swipeEnd()">
+          <!-- star sits outside .flip-area so it never rotates — a hard term
+               can be starred mid-session and revisited via the Starred filter -->
+          <button class="icon-btn star-btn" :class="{ starred: sessionCard().starred }"
+                  @click.stop="toggleStar(sessionCard().id)"
+                  :aria-pressed="!!sessionCard().starred"
+                  :aria-label="(sessionCard().starred ? 'Unstar ' : 'Star ') + sessionCard().title"
+                  x-text="sessionCard().starred ? '★' : '☆'"></button>
           <div class="flip-area" role="button" tabindex="0" @click="sessionFlip()"
                @keydown.enter.prevent="sessionFlip()"
                :aria-label="'Flip card: ' + sessionCard().title" :aria-pressed="session.flipped">
@@ -432,7 +485,9 @@
 
         <!-- Verdict: reveal the answer, then judge it. Buttons stay disabled
              until the card is flipped so you can't grade a face you haven't seen.
-             Advancing with → instead leaves no verdict — that's a skip. -->
+             Marking rides the fling animation to the next card (tinder-style);
+             ← goes back for second thoughts. A card passed with no verdict
+             recorded is a skip. -->
         <div class="verdict-row">
           <button class="verdict-btn" :class="{ marked: session.verdicts[sessionCard().id] === 'wrong' }"
                   :disabled="!session.flipped" @click="markVerdict('wrong')"
@@ -443,10 +498,10 @@
         </div>
 
         <div class="session-controls">
-          <button class="icon-btn" @click="sessionPrev()" :disabled="session.idx === 0" aria-label="Previous card">←</button>
+          <button class="icon-btn" @click="flingPrev()" :disabled="session.idx === 0" aria-label="Previous card">←</button>
           <span class="caption" x-text="(session.idx + 1) + ' / ' + session.ids.length"></span>
-          <button class="icon-btn" @click="sessionNext()"
-                  :aria-label="session.idx === session.ids.length - 1 ? 'Finish session' : 'Skip to next card'">→</button>
+          <button class="icon-btn" @click="flingNext()"
+                  :aria-label="session.idx === session.ids.length - 1 ? 'Finish session' : 'Next card'">→</button>
         </div>
       </div>
     </template>

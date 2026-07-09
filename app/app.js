@@ -42,13 +42,19 @@ function glossaryApp() {
     recent: [],
     result: null, resultState: 'idle', candidates: [], expanded: false,
     dictOption: null, // exact-word dictionary hit offered on a disambiguation page
-    cards: [], mode: 'overview', cardSearch: '',
+    cards: [], mode: 'overview', cardSearch: '', filtersOpen: false,
     tagFilters: [], reviewedFilter: 'all', exportedFilter: 'all', starFilter: false,
     cardPage: 1, cardPageSize: 12,
-    selectMode: false, selectIntent: 'review', selected: [], flipped: {},
+    selectMode: false, selected: [], flipped: {},
     // focused review session (#/review) — survives detours to a card's detail page.
     // verdicts maps cardId → 'correct'|'wrong'; a card with no entry was skipped.
     session: { ids: [], idx: 0, flipped: false, done: false, verdicts: {} },
+    // tinder-style swipe on the session card: dx tracks the live touch drag,
+    // anim drives the fling-out / rise-in CSS classes between cards. The same
+    // fling also serves the arrow buttons, keyboard arrows, and verdicts.
+    swipe: { dx: 0, dragging: false, anim: '' },
+    _swipeStartX: 0, _swipeStartY: 0, _swipeAxis: null, _suppressFlip: false,
+    _flingMs: 240, // fling duration; unit tests set 0 for determinism
     _histStack: [], _lastHash: '', _backNav: false,
     detailId: null,
     toolbar: { show: false, x: 0, y: 0, text: '', context: 'results' },
@@ -60,7 +66,7 @@ function glossaryApp() {
     exportSheet: false,
     prefs: { theme: 'light', brightness: 20, warmth: 0, fontScale: 1 },
     devices: [], pairCode: '', enterCode: '',
-    toast: '', _toastTimer: null, _sugTimer: null,
+    toast: '', _toastTimer: null, _sugTimer: null, _selChangeTimer: null,
     announce: '', _announceTimer: null,
 
     /* ---------- init & routing ---------- */
@@ -72,6 +78,15 @@ function glossaryApp() {
       this.applyPrefs();
       this.regenCode();
       window.addEventListener('hashchange', () => this.route());
+      // Touch highlight path: a long-press selection never fires mouseup, so
+      // watch selectionchange instead — debounced past the handle-dragging so
+      // the toolbar appears once the selection settles. Idempotent for mouse
+      // users, who already got the toolbar from mouseup.
+      document.addEventListener('selectionchange', () => {
+        if (this.page !== 'results' && this.page !== 'detail') return;
+        clearTimeout(this._selChangeTimer);
+        this._selChangeTimer = setTimeout(() => this.onSelectionSettled(), 350);
+      });
       this.route();
       this.$nextTick(() => this.focusSearch());
       // any change to the flashcard filters lands you back on page 1 —
@@ -164,8 +179,8 @@ function glossaryApp() {
       if (e.key === 'Escape') { this.showDropdown = false; this.toolbar.show = false; }
       // review session: arrows page through the deck, space flips the card
       if (this.page === 'review' && !typing && !this.session.done) {
-        if (e.key === 'ArrowRight') this.sessionNext();
-        if (e.key === 'ArrowLeft') this.sessionPrev();
+        if (e.key === 'ArrowRight') this.flingNext();
+        if (e.key === 'ArrowLeft') this.flingPrev();
         if (e.key === ' ') { e.preventDefault(); this.sessionFlip(); }
       }
     },
@@ -453,7 +468,19 @@ function glossaryApp() {
       if (card) { this.unsaveCard(card); return; }
       if (context === 'results') {
         const made = this.createCardFromResult();
-        if (made) { this.showToast('✓ Saved to flashcards'); this.syncCardEditor(made); }
+        if (made) {
+          this.showToast('✓ Saved to flashcards');
+          this.syncCardEditor(made);
+          // saving reveals the notes editor below the article — bring it into
+          // view so the next step (notes & tags) isn't stranded below the fold
+          this.$nextTick(() => {
+            const ed = [...document.querySelectorAll('.note-editor')].find(el => el.getClientRects().length);
+            if (ed) ed.scrollIntoView({
+              behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+              block: 'start',
+            });
+          });
+        }
       }
     },
     unsaveCard(card) {
@@ -585,13 +612,16 @@ function glossaryApp() {
       // flashcard checkbox is itself clickable.
       this.mode = m; this.flipped = {};
     },
-    /* Two entry points, one selection mode: "Start Review" and "Export" both
-       open selection with their own intent — each intent exposes exactly one
-       launch verb, so the user always knows what the selection is for. */
-    toggleSelectMode(intent = 'review') {
+    /* One "Select" entry into a neutral selection mode; the selection bar
+       offers every verb (Review / Export / Delete) at once, with a visual
+       hierarchy instead of intent-scoped buttons — three doors would crowd
+       the toolbar and give Delete top-level prominence it shouldn't have. */
+    toggleSelectMode() {
       this.selectMode = !this.selectMode;
-      this.selectIntent = intent;
       this.selected = [];
+      // one surface at a time: entering selection folds the filter panel away
+      // (the filter icon stays available for a deliberate re-open)
+      if (this.selectMode) this.filtersOpen = false;
     },
     /* "Select all" operates on the filtered set (tags + search + status), not the
        whole collection — filter to a topic, select all, review just that topic. */
@@ -601,12 +631,25 @@ function glossaryApp() {
       const vis = this.visibleCards();
       return vis.length > 0 && vis.every(c => this.selected.includes(c.id));
     },
-    /* One launch verb per intent — the selection bar shows exactly one primary
-       action, so there is never more than one primary button in play. */
-    launchSelection() {
-      if (!this.selected.length) return;
-      if (this.selectIntent === 'review') this.startSession(this.selected);
-      else this.exportSheet = true;
+    /* Selection-bar verbs. All three act on the current pick; each no-ops on an
+       empty selection (the buttons are also disabled at zero). Delete is the
+       only destructive one, so it alone confirms first. */
+    reviewSelected() {
+      if (this.selected.length) this.startSession(this.selected);
+    },
+    exportSelected() {
+      if (this.selected.length) this.exportSheet = true;
+    },
+    deleteSelected() {
+      const n = this.selected.length;
+      if (!n) return;
+      if (!confirm(`Delete ${n} flashcard${n === 1 ? '' : 's'}? Their notes and highlights will be lost.`)) return;
+      const drop = new Set(this.selected);
+      this.cards = this.cards.filter(c => !drop.has(c.id));
+      this.persistCards();
+      this.selectMode = false;
+      this.selected = [];
+      this.showToast(`${n} card${n === 1 ? '' : 's'} removed from collection`);
     },
     toggleTagFilter(t) {
       // reassign (never mutate) so the $watch that resets pagination fires
@@ -620,6 +663,14 @@ function glossaryApp() {
       this.cardSearch = ''; this.tagFilters = [];
       this.reviewedFilter = 'all'; this.exportedFilter = 'all'; this.starFilter = false;
     },
+    /* How many filters are narrowing the collection — shown on the collapsed
+       mobile Filters chip so an active filter is never invisible. */
+    activeFilterCount() {
+      return (this.reviewedFilter !== 'all' ? 1 : 0)
+        + (this.exportedFilter !== 'all' ? 1 : 0)
+        + (this.starFilter ? 1 : 0)
+        + this.tagFilters.length;
+    },
 
     /* ---------- focused review session ---------- */
     startSession(ids) {
@@ -631,15 +682,81 @@ function glossaryApp() {
       const valid = this.computeReviewOrder().filter(id => want.has(id));
       if (!valid.length) return;
       this.session = { ids: valid, idx: 0, flipped: false, done: false, verdicts: {} };
-      this.selectMode = false; this.selectIntent = 'review'; this.selected = [];
+      this.selectMode = false; this.selected = [];
       this.nav('review');
     },
     sessionCard() { return this.cards.find(c => c.id === this.session.ids[this.session.idx]) || null; },
     sessionFlip() {
+      // the tap that ends a horizontal drag must not also flip the card
+      if (this._suppressFlip) { this._suppressFlip = false; return; }
       const c = this.sessionCard();
       if (!c) return;
       this.session.flipped = !this.session.flipped;
       if (this.session.flipped) this.markReviewed(c.id); // revealing the answer counts as a review
+    },
+    /* ---------- swipe navigation (session card, touch) ----------
+       Tinder-style: the card follows the finger (translate + slight rotate),
+       snaps back under the 80px threshold, or flings off-screen and advances.
+       Horizontal only — a vertical start hands the gesture back to scrolling
+       (touch-action: pan-y lets the browser keep vertical pans). */
+    swipeStart(e) {
+      if (this.session.done || this.swipe.anim) return;
+      const t = e.touches[0];
+      this._swipeStartX = t.clientX; this._swipeStartY = t.clientY;
+      this._swipeAxis = null; this._suppressFlip = false;
+      this.swipe.dragging = true; this.swipe.dx = 0;
+    },
+    swipeMove(e) {
+      if (!this.swipe.dragging) return;
+      const t = e.touches[0];
+      const dx = t.clientX - this._swipeStartX;
+      const dy = t.clientY - this._swipeStartY;
+      // lock the gesture to one axis on first meaningful movement
+      if (!this._swipeAxis && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+        this._swipeAxis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+      }
+      if (this._swipeAxis === 'x') this.swipe.dx = dx;
+    },
+    swipeEnd() {
+      if (!this.swipe.dragging) return;
+      this.swipe.dragging = false;
+      const dx = this.swipe.dx;
+      this._suppressFlip = Math.abs(dx) > 10;
+      const threshold = 80;
+      if (dx < -threshold) this.swipeFling(-1);                            // left → next / finish
+      else if (dx > threshold && this.session.idx > 0) this.swipeFling(1); // right → previous
+      else this.swipe.dx = 0;                                             // snap back
+    },
+    /* Fling out (CSS class animates the card off-screen), advance the deck,
+       then let the incoming card rise in from a scaled-down start frame.
+       Shared by the swipe gesture, the arrow buttons/keys, and verdicts. */
+    swipeFling(dir) {
+      // one card in flight at a time — but the incoming card's brief rise-in
+      // ('in') may be interrupted by the next fling, or rapid ←/→ taps would
+      // intermittently swallow clicks
+      if (this.swipe.anim && this.swipe.anim !== 'in') return;
+      if (dir > 0 && this.session.idx === 0) return; // nothing before the first card
+      this.swipe.anim = dir < 0 ? 'out-left' : 'out-right';
+      setTimeout(() => {
+        if (dir < 0) this.sessionNext(); else this.sessionPrev();
+        this.swipe = { dx: 0, dragging: false, anim: 'in' };
+        const release = () => { if (this.swipe.anim === 'in') this.swipe.anim = ''; };
+        // two frames: the first paints the scaled-down start state, the second
+        // removes it so the transition runs to the resting card. rAF is
+        // throttled in background tabs, so a timeout guarantees the release —
+        // a stuck 'in' frame would otherwise block all further navigation.
+        requestAnimationFrame(() => requestAnimationFrame(release));
+        setTimeout(release, Math.min(120, this._flingMs || 120));
+      }, this._flingMs);
+    },
+    /* Animated navigation: every way of moving through the deck (buttons,
+       ←/→ keys, verdicts, swipes) plays the same fling, so the deck has one
+       motion language everywhere — including on desktop. */
+    flingNext() { this.swipeFling(-1); },
+    flingPrev() { this.swipeFling(1); },
+    swipeStyle() {
+      if (!this.swipe.dragging || !this.swipe.dx) return '';
+      return `transform: translateX(${this.swipe.dx}px) rotate(${(this.swipe.dx * 0.06).toFixed(2)}deg); transition: none;`;
     },
     sessionNext() {
       if (this.session.idx < this.session.ids.length - 1) {
@@ -664,14 +781,17 @@ function glossaryApp() {
       const c = this.cards.find(x => x.id === id);
       if (c) { c.starred = !c.starred; this.persistCards(); }
     },
-    /* Right/Wrong record a verdict and advance. A card the reader passes with
-       the → button instead never gets a verdict — that absence is the "skip". */
+    /* Right/Wrong record a verdict for the current card, then ride the fling
+       animation to the next one (tinder-style — the judged card flies off).
+       ← always goes back if second thoughts strike. A card passed with no
+       verdict recorded is the "skip". */
     markVerdict(v) {
+      if (this.swipe.anim && this.swipe.anim !== 'in') return; // card is mid-flight
       const c = this.sessionCard();
       if (!c) return;
       this.session.verdicts[c.id] = v;
       this.markReviewed(c.id);
-      this.sessionNext();
+      this.swipeFling(-1);
     },
     finishSession() { this.session.done = true; },
     sessionStats() {
@@ -852,6 +972,18 @@ function glossaryApp() {
     onTextKeyUp(e, context) {
       if (!e.shiftKey || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) return;
       this.showToolbarForSelection(e.currentTarget, context);
+    },
+    /* Runs ~350ms after the selection stops changing (see init). Finds the
+       visible extract that owns the selection and surfaces the same toolbar
+       the mouseup path shows — this is the only path for touch long-press. */
+    onSelectionSettled() {
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return; // closeTransient owns hiding
+      const node = sel.getRangeAt(0).commonAncestorContainer;
+      const container = [...document.querySelectorAll('.extract')]
+        .find(el => el.getClientRects().length && el.contains(node));
+      if (!container) return;
+      this.showToolbarForSelection(container, this.page === 'detail' ? 'detail' : 'results');
     },
     showToolbarForSelection(container, context) {
       const sel = window.getSelection();
@@ -1110,10 +1242,13 @@ function glossaryApp() {
       root.setAttribute('data-theme', this.prefs.theme);
       root.style.setProperty('--user-font-scale', this.prefs.fontScale);
       if (this.prefs.theme === 'light') {
-        root.style.setProperty('--reading-brightness', (0.85 + (this.prefs.brightness - 1) / 19 * 0.15).toFixed(3));
+        // dim overlay opacity replaces the old body brightness filter (a filter
+        // on <body> broke every position:fixed element — see styles.css body rule).
+        // brightness 20 → dim 0; brightness 1 → dim 0.15 (same visual range).
+        root.style.setProperty('--reading-dim', ((20 - this.prefs.brightness) / 19 * 0.15).toFixed(3));
         root.style.setProperty('--reading-warmth', (this.prefs.warmth / 20 * 0.18).toFixed(3));
       } else {
-        root.style.setProperty('--reading-brightness', 1);
+        root.style.setProperty('--reading-dim', 0);
         root.style.setProperty('--reading-warmth', 0);
       }
     },
