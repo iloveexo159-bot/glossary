@@ -13,7 +13,10 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
 <script src="app.js"></script>
-<script type="module" src="firebase.js"></script>
+<!-- async: a plain module blocks DOMContentLoaded until its CDN imports fetch,
+     which would hold Alpine's mount hostage to gstatic on a slow connection.
+     initAuth() handles both orders via the glossary-firebase-ready event. -->
+<script type="module" async src="firebase.js"></script>
 </head>
 <body x-data="glossaryApp()" x-init="init()" @keydown.window="onKeydown($event)" @click="closeTransient($event)">
 <div id="warmth-overlay"></div>
@@ -74,6 +77,22 @@
     <a href="#/home" :class="{ active: page==='home' || page==='results' }">Home</a>
     <a href="#/cards" :class="{ active: page==='cards' || page==='detail' || page==='review' }">Collection</a>
   </nav>
+
+  <!-- Account: person icon signed out, grayscale Google avatar signed in
+       (monochrome aesthetic — the photo joins the e-ink palette). One door:
+       the icon always leads to #/login, which renders the right state. -->
+  <button class="icon-btn account-btn" @click="nav('login')"
+          :aria-label="authState==='signedIn' ? 'Account — signed in as ' + (user?.name || user?.email) : 'Sign in'">
+    <template x-if="authState==='signedIn' && user?.photo">
+      <img class="avatar" :src="user.photo" alt="" referrerpolicy="no-referrer">
+    </template>
+    <template x-if="authState==='signedIn' && !user?.photo">
+      <span class="avatar avatar-initial" x-text="(user?.name || user?.email || '?')[0].toUpperCase()"></span>
+    </template>
+    <template x-if="authState!=='signedIn'">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M5.5 21a6.5 6.5 0 0 1 13 0"/></svg>
+    </template>
+  </button>
 
   <button class="icon-btn" @click="nav('settings')" aria-label="Settings">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.6 1.6 0 0 0 .32 1.76l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.6 1.6 0 0 0-1.76-.32 1.6 1.6 0 0 0-.97 1.47V21a2 2 0 1 1-4 0v-.09a1.6 1.6 0 0 0-1.05-1.47 1.6 1.6 0 0 0-1.76.32l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.6 1.6 0 0 0 .32-1.76 1.6 1.6 0 0 0-1.47-.97H3a2 2 0 1 1 0-4h.09a1.6 1.6 0 0 0 1.47-1.05 1.6 1.6 0 0 0-.32-1.76l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.6 1.6 0 0 0 1.76.32h.09a1.6 1.6 0 0 0 .97-1.47V3a2 2 0 1 1 4 0v.09a1.6 1.6 0 0 0 .97 1.47 1.6 1.6 0 0 0 1.76-.32l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.6 1.6 0 0 0-.32 1.76v.09a1.6 1.6 0 0 0 1.47.97H21a2 2 0 1 1 0 4h-.09a1.6 1.6 0 0 0-1.47.97z"/></svg>
@@ -669,6 +688,43 @@
       </template>
       <div style="margin-top:var(--space-base);">
         <button class="btn-outline" @click="nav('pairing')">Pair a new device</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ LOGIN / ACCOUNT (PRD §8.2) ============ -->
+  <!-- One page, three states: pending (auth check in flight), signedOut
+       (Google button + what an account buys you), signedIn (identity + sign out). -->
+  <section x-show="page==='login'" x-cloak>
+    <div class="login-wrap">
+      <h1 class="page-title">Account</h1>
+
+      <div class="state-box" x-show="authState==='pending'"><p>Checking sign-in…</p></div>
+
+      <div class="settings-group" x-show="authState==='signedOut'" x-cloak>
+        <p class="login-copy">Sign in to back up your flashcards, review history and exports — and pick them up on any device.</p>
+        <button class="btn-primary btn-google" @click="signIn()" :disabled="authUnavailable">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 11v2.7h6.35c-.28 1.6-1.9 4.7-6.35 4.7-3.83 0-6.95-3.17-6.95-7.08S8.17 4.24 12 4.24c2.18 0 3.64.93 4.47 1.73l3.04-2.93C17.56 1.22 15.02.1 12 .1 5.42.1.1 5.42.1 12S5.42 23.9 12 23.9c6.87 0 11.43-4.83 11.43-11.63 0-.78-.08-1.38-.19-1.97H12z"/></svg>
+          Continue with Google
+        </button>
+        <p class="muted login-note" x-show="authUnavailable" x-cloak>Sign-in is unavailable right now — check your connection and reload.</p>
+        <p class="muted login-note">Until you sign in, your cards live only in this browser.</p>
+      </div>
+
+      <div class="settings-group" x-show="authState==='signedIn'" x-cloak>
+        <div class="account-row">
+          <template x-if="user?.photo">
+            <img class="avatar avatar-lg" :src="user.photo" alt="" referrerpolicy="no-referrer">
+          </template>
+          <template x-if="!user?.photo">
+            <span class="avatar avatar-lg avatar-initial" x-text="(user?.name || user?.email || '?')[0].toUpperCase()"></span>
+          </template>
+          <div class="account-id">
+            <b x-text="user?.name || 'Signed in'"></b>
+            <span class="muted" x-text="user?.email"></span>
+          </div>
+        </div>
+        <button class="btn-outline" @click="signOutUser()">Sign out</button>
       </div>
     </div>
   </section>

@@ -66,6 +66,12 @@ function glossaryApp() {
     exportSheet: false,
     prefs: { theme: 'light', brightness: 20, warmth: 0, fontScale: 1 },
     devices: [], pairCode: '', enterCode: '',
+    // auth (PRD §8.2): pending → signedOut ⇄ signedIn. `user` is a minimal
+    // snapshot ({uid,name,email,photo}) — never the SDK User object, which
+    // Alpine's reactive proxy would wrap and break. authUnavailable = Firebase
+    // failed to init (offline first load, CSP block): the app keeps working
+    // locally and the login page explains why the button is disabled.
+    authState: 'pending', user: null, authUnavailable: false,
     toast: '', _toastTimer: null, _sugTimer: null, _selChangeTimer: null,
     announce: '', _announceTimer: null,
 
@@ -77,6 +83,7 @@ function glossaryApp() {
       this.devices = lsGet(LS.devices, [{ id: 'this', name: 'This device', current: true }]);
       this.applyPrefs();
       this.regenCode();
+      this.initAuth();
       window.addEventListener('hashchange', () => this.route());
       // Touch highlight path: a long-press selection never fires mouseup, so
       // watch selectionchange instead — debounced past the handle-dragging so
@@ -140,7 +147,7 @@ function glossaryApp() {
         // reload with no session running falls back to the collection page
         if (this.session.ids.length) this.page = 'review';
         else this.nav('cards');
-      } else if (['home', 'cards', 'settings', 'pairing'].includes(p)) {
+      } else if (['home', 'cards', 'settings', 'pairing', 'login'].includes(p)) {
         this.page = p;
         if (p === 'home') this.$nextTick(() => this.focusSearch());
       } else {
@@ -1330,6 +1337,68 @@ function glossaryApp() {
       this.devices = this.devices.filter(d => d.id !== id);
       lsSet(LS.devices, this.devices);
       this.showToast('Device access revoked');
+    },
+
+    /* ---------- auth (Google sign-in — PRD §8, Phase C) ----------
+       firebase.js (a CDN ES module) may finish before or after Alpine mounts,
+       so wire the auth listener either way: if window.GlossaryFirebase already
+       exists we attach now; otherwise the ready/error events fire exactly once
+       when the module settles. onAuthStateChanged is the single source of
+       truth for authState — signIn/signOut never set it directly. */
+    initAuth() {
+      const wire = () => {
+        const fb = window.GlossaryFirebase;
+        if (!fb) { this.authState = 'signedOut'; this.authUnavailable = true; return; }
+        fb.onAuthStateChanged(fb.auth, u => {
+          this.user = u ? {
+            uid: u.uid,
+            name: u.displayName || '',
+            email: u.email || '',
+            photo: u.photoURL || '',
+          } : null;
+          this.authState = u ? 'signedIn' : 'signedOut';
+        });
+      };
+      if (window.GlossaryFirebase !== undefined) wire();
+      else {
+        window.addEventListener('glossary-firebase-ready', wire, { once: true });
+        window.addEventListener('glossary-firebase-error', wire, { once: true });
+      }
+    },
+    async signIn() {
+      const fb = window.GlossaryFirebase;
+      if (!fb) { this.showToast('Sign-in is unavailable right now'); return; }
+      try {
+        await fb.signInWithPopup(fb.auth, fb.googleProvider);
+        // onAuthStateChanged updates user/authState; we only handle navigation
+        this.showToast('✓ Signed in');
+      } catch (err) {
+        this.handleSignInError(err);
+      }
+    },
+    /* Each failure mode gets its own message: a closed popup is the user's own
+       action (gentle note), a blocked popup looks like "nothing happened" so it
+       must explain itself, and offline points at the connection — not the app. */
+    handleSignInError(err) {
+      console.error('[Glossary] sign-in failed:', err);
+      const messages = {
+        'auth/popup-closed-by-user': 'Sign-in cancelled',
+        'auth/cancelled-popup-request': 'Sign-in cancelled',
+        'auth/popup-blocked': '⚠ Popup blocked — allow popups for this site and try again',
+        'auth/network-request-failed': '⚠ You’re offline — check your connection and try again',
+      };
+      this.showToast(messages[err?.code] || '⚠ Sign-in didn’t complete — try again');
+    },
+    async signOutUser() {
+      const fb = window.GlossaryFirebase;
+      if (!fb) return;
+      try {
+        await fb.signOut(fb.auth);
+        this.showToast('Signed out');
+      } catch (err) {
+        console.error('[Glossary] sign-out failed:', err);
+        this.showToast('⚠ Couldn’t sign out — try again');
+      }
     },
 
     /* ---------- toast & live announcements ---------- */

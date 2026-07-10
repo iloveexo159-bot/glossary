@@ -142,6 +142,30 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 .icon-btn:hover { outline: 2px solid var(--color-text-primary); outline-offset: 1px; color: var(--color-text-primary); }
 .icon-btn svg { width: 1.25rem; height: 1.25rem; display: block; }
 
+/* ---------- Account & login ---------- */
+/* Google avatars are grayscaled so the one photo on screen doesn't break the
+   monochrome e-ink surface; the login page shows the same treatment larger. */
+.avatar {
+  width: 1.625rem; height: 1.625rem; border-radius: var(--rounded-full);
+  display: block; object-fit: cover; filter: grayscale(1);
+}
+.avatar-initial {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--color-text-primary); color: var(--color-background);
+  font-family: var(--font-sans); font-weight: 700; font-size: 0.875rem;
+}
+.avatar-lg { width: 3rem; height: 3rem; font-size: 1.25rem; }
+.login-wrap { max-width: 460px; margin: 0 auto; }
+.login-wrap .settings-group { max-width: none; }
+.login-copy { font-family: var(--font-sans); font-size: var(--type-ui-size); margin: 0 0 var(--space-base); }
+.login-note { font-family: var(--font-sans); font-size: var(--type-label-size); margin: var(--space-md) 0 0; }
+.btn-google { display: inline-flex; align-items: center; gap: 0.625rem; }
+.btn-google svg { width: 1.125rem; height: 1.125rem; flex-shrink: 0; }
+.btn-google:disabled { opacity: 0.4; cursor: default; }
+.account-row { display: flex; align-items: center; gap: var(--space-md); margin-bottom: var(--space-base); }
+.account-id { display: flex; flex-direction: column; gap: 0.125rem; font-family: var(--font-sans); }
+.account-id .muted { font-size: var(--type-label-size); }
+
 /* ---------- Search ---------- */
 .search-wrap { position: relative; flex: 1; max-width: 560px; }
 .input-search {
