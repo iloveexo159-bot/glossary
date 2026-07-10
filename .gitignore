@@ -11,3 +11,8 @@ node_modules/
 test-results/
 playwright-report/
 .playwright/
+
+# Firebase emulator artifacts (local, dev-only)
+*-debug.log
+firebase-debug.*.log
+.firebase/
