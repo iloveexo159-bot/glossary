@@ -575,7 +575,25 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
   display: flex; flex-wrap: wrap; align-items: center; gap: 0.375rem;
   background: var(--color-background); border: 1px solid var(--color-border);
   border-radius: var(--rounded-sm); padding: 0.375rem 0.5rem; min-height: 2.25rem;
+  position: relative; /* anchors the recent-tags dropdown */
 }
+/* Recent-tags disclosure: the arrow is a real button (the native datalist
+   indicator wasn't reliably clickable). The 44px hit area is kept without
+   inflating the chip row by letting negative margins absorb the overflow. */
+.tag-menu-btn {
+  background: transparent; border: none; cursor: pointer;
+  color: var(--color-text-muted); font-size: 0.875rem; line-height: 1;
+  min-width: max(2.75rem, 44px); min-height: max(2.75rem, 44px);
+  margin: -0.625rem -0.375rem; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: var(--rounded-sm); flex-shrink: 0;
+}
+.tag-menu-btn:hover, .tag-menu-btn[aria-expanded="true"] { color: var(--color-text-primary); outline: 1px solid var(--color-border); }
+.tag-dropdown { max-height: 14rem; overflow-y: auto; }
+/* Inside the note dialog the tag input sits near the bottom of an
+   overflow:auto box — a downward menu would be clipped into a scroll.
+   Opening upward keeps all five rows visible over the textarea. */
+.dialog .tag-dropdown { top: auto; bottom: calc(100% + 0.5rem); }
 .input-tags input {
   flex: 1; min-width: 90px; border: none; background: transparent;
   font-family: var(--font-sans); font-size: var(--type-label-size); font-weight: 600;

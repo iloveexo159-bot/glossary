@@ -236,6 +236,17 @@
             <input id="rc-tags" x-model="cardEditor.tagInput" list="all-tags"
                    placeholder="Add a tag, space to confirm" aria-label="Add a tag"
                    @keydown="onTagKeydown($event, 'card')">
+            <button class="tag-menu-btn" type="button" aria-label="Show recent tags"
+                    :aria-expanded="(tagMenu.open && tagMenu.id === 'rc') ? 'true' : 'false'"
+                    @click.stop="toggleTagMenu('card', 'rc')">▾</button>
+            <div class="dropdown tag-dropdown" x-show="tagMenu.open && tagMenu.id === 'rc'" x-cloak
+                 @click.outside="tagMenu.open = false">
+              <div class="head"><span>Recent tags</span></div>
+              <template x-for="t in recentTags('card')" :key="t">
+                <button class="row" type="button" @click="pickRecentTag('card', t)">#<span x-text="t"></span></button>
+              </template>
+              <div class="empty" x-show="recentTags('card').length === 0">No recent tags yet — type one to start.</div>
+            </div>
           </div>
           <div class="editor-actions">
             <button class="btn-text" x-show="cardEditor.editing" x-cloak @click="cancelCardNote()">CANCEL</button>
@@ -599,6 +610,17 @@
             <input id="dc-tags" x-model="cardEditor.tagInput" list="all-tags"
                    placeholder="Add a tag, space to confirm" aria-label="Add a tag"
                    @keydown="onTagKeydown($event, 'card')">
+            <button class="tag-menu-btn" type="button" aria-label="Show recent tags"
+                    :aria-expanded="(tagMenu.open && tagMenu.id === 'dc') ? 'true' : 'false'"
+                    @click.stop="toggleTagMenu('card', 'dc')">▾</button>
+            <div class="dropdown tag-dropdown" x-show="tagMenu.open && tagMenu.id === 'dc'" x-cloak
+                 @click.outside="tagMenu.open = false">
+              <div class="head"><span>Recent tags</span></div>
+              <template x-for="t in recentTags('card')" :key="t">
+                <button class="row" type="button" @click="pickRecentTag('card', t)">#<span x-text="t"></span></button>
+              </template>
+              <div class="empty" x-show="recentTags('card').length === 0">No recent tags yet — type one to start.</div>
+            </div>
           </div>
           <div class="editor-actions">
             <button class="btn-text" x-show="cardEditor.editing" x-cloak @click="cancelCardNote()">CANCEL</button>
@@ -865,6 +887,17 @@
       <input id="note-tags" x-model="noteDialog.tagInput" list="all-tags"
              placeholder="Add a tag, space to confirm" aria-label="Add a tag"
              @keydown="onTagKeydown($event, 'note')">
+      <button class="tag-menu-btn" type="button" aria-label="Show recent tags"
+              :aria-expanded="(tagMenu.open && tagMenu.id === 'note') ? 'true' : 'false'"
+              @click.stop="toggleTagMenu('note', 'note')">▾</button>
+      <div class="dropdown tag-dropdown" x-show="tagMenu.open && tagMenu.id === 'note'" x-cloak
+           @click.outside="tagMenu.open = false">
+        <div class="head"><span>Recent tags</span></div>
+        <template x-for="t in recentTags('note')" :key="t">
+          <button class="row" type="button" @click="pickRecentTag('note', t)">#<span x-text="t"></span></button>
+        </template>
+        <div class="empty" x-show="recentTags('note').length === 0">No recent tags yet — type one to start.</div>
+      </div>
     </div>
     <div class="actions">
       <button class="btn-text" @click="deleteFromDialog()">DELETE</button>

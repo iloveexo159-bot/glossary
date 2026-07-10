@@ -63,8 +63,14 @@ function glossaryApp() {
     // The editor is an ADD/EDIT input that starts empty; a saved note moves to the
     // "Existing notes" list below. `editing` re-opens the editor over a saved note.
     cardEditor: { id: null, note: '', tags: [], tagInput: '', editing: false },
+    // recent-tags dropdown on the tag inputs. `id` names which of the three
+    // inputs owns the open menu (rc/dc/note) so only one opens at a time;
+    // `target` picks the editor object the chosen tag lands in.
+    tagMenu: { open: false, target: 'card', id: '' },
     exportSheet: false,
-    prefs: { theme: 'light', brightness: 20, warmth: 0, fontScale: 1 },
+    // tagRecency: most-recently-used tags, newest first (capped). Local-only
+    // like every pref — feeding the dropdown costs no Firestore reads/writes.
+    prefs: { theme: 'light', brightness: 20, warmth: 0, fontScale: 1, tagRecency: [] },
     // auth (PRD §8.2): pending → signedOut ⇄ signedIn. `user` is a minimal
     // snapshot ({uid,name,email,photo}) — never the SDK User object, which
     // Alpine's reactive proxy would wrap and break. authUnavailable = Firebase
@@ -523,7 +529,10 @@ function glossaryApp() {
        input, so the note surfaces in the "Existing notes" list below rather than
        lingering in the box. EDIT there loads it back for changes. */
     editorCard() { return this.cards.find(c => c.id === this.cardEditor.id) || null; },
-    resetEditor(id) { this.cardEditor = { id: id ?? null, note: '', tags: [], tagInput: '', editing: false }; },
+    resetEditor(id) {
+      this.cardEditor = { id: id ?? null, note: '', tags: [], tagInput: '', editing: false };
+      this.tagMenu.open = false;
+    },
     syncCardEditor(card) { this.resetEditor(card ? card.id : null); },
     editCardNote() {
       const c = this.editorCard();
@@ -539,6 +548,7 @@ function glossaryApp() {
       if (!c) return;
       const pending = this.cardEditor.tagInput.trim().replace(/^#/, '');
       if (pending && !this.cardEditor.tags.includes(pending)) this.cardEditor.tags.push(pending);
+      if (pending) this.recordTagUse(pending);
       c.note = this.cardEditor.note.trim();
       c.tags = [...new Set(this.cardEditor.tags)];
       const ok = this.persistCards();
@@ -1140,6 +1150,7 @@ function glossaryApp() {
         tags: [...(found.h.tags || [])], tagInput: '',
         highlightId: hlId, cardId: found.card.id,
       };
+      this.tagMenu.open = false; // never inherit a menu left open elsewhere
       this.$nextTick(() => this.$refs.noteText && this.$refs.noteText.focus());
     },
     closeNoteDialog(save) {
@@ -1149,12 +1160,14 @@ function glossaryApp() {
           // commit any tag still sitting in the input
           const pending = this.noteDialog.tagInput.trim().replace(/^#/, '');
           if (pending) this.noteDialog.tags.push(pending);
+          if (pending) this.recordTagUse(pending);
           found.h.note = this.noteDialog.text.trim();
           found.h.tags = [...new Set(this.noteDialog.tags)];
           this.showToast(this.persistCards() ? '✓ Note saved' : '⚠ Couldn’t save — device storage may be full');
         }
       }
       this.noteDialog.show = false;
+      this.tagMenu.open = false;
     },
     deleteFromDialog() {
       const found = this.findHighlight(this.noteDialog.highlightId);
@@ -1181,10 +1194,42 @@ function glossaryApp() {
         const tag = dlg.tagInput.trim().replace(/^#/, '').replace(/\s+/g, '-');
         if (!tag) return;
         if (!dlg.tags.includes(tag)) dlg.tags.push(tag);
+        this.recordTagUse(tag);
         dlg.tagInput = '';
       } else if (e.key === 'Backspace' && dlg.tagInput === '') {
         dlg.tags.pop();
       }
+    },
+    /* Recency is recorded at commit time (chip created), not on save, so the
+       list mirrors what the user actually typed or picked most recently. */
+    recordTagUse(tag) {
+      const list = (this.prefs.tagRecency || []).filter(t => t !== tag);
+      list.unshift(tag);
+      this.prefs.tagRecency = list.slice(0, 30);
+      this.persistPrefs();
+    },
+    /* Top 5 latest tags for the dropdown, minus ones already chips in the
+       active editor. First run (nothing recorded yet) falls back to tags off
+       the newest-saved cards so the menu is never pointlessly empty. */
+    recentTags(target) {
+      const dlg = target === 'note' ? this.noteDialog : this.cardEditor;
+      let pool = this.prefs.tagRecency || [];
+      if (!pool.length) {
+        pool = [];
+        [...this.cards].sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0))
+          .forEach(c => this.cardTags(c).forEach(t => { if (!pool.includes(t)) pool.push(t); }));
+      }
+      return pool.filter(t => !dlg.tags.includes(t)).slice(0, 5);
+    },
+    toggleTagMenu(target, id) {
+      if (this.tagMenu.open && this.tagMenu.id === id) { this.tagMenu.open = false; return; }
+      this.tagMenu = { open: true, target, id };
+    },
+    pickRecentTag(target, tag) {
+      const dlg = target === 'note' ? this.noteDialog : this.cardEditor;
+      if (!dlg.tags.includes(tag)) dlg.tags.push(tag);
+      this.recordTagUse(tag);
+      this.tagMenu.open = false;
     },
 
     /* ---------- export ---------- */

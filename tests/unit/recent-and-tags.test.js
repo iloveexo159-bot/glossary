@@ -62,3 +62,51 @@ test('backspace on an empty input pops the last tag (inline card editor)', () =>
   comp.onTagKeydown(tagEvent('Backspace'), 'card');
   assert.deepEqual(Array.from(comp.cardEditor.tags), ['a']);
 });
+
+/* Recent-tags dropdown (the ▾ on every tag input): fed by prefs.tagRecency,
+   which is local-only — the feature adds no Firestore reads or writes. */
+
+test('committing a tag records it at the head of the recency list', () => {
+  const comp = newComp();
+  comp.prefs.tagRecency = ['old'];
+  comp.noteDialog.tagInput = 'fresh';
+  comp.onTagKeydown(tagEvent('Enter'), 'note');
+  assert.deepEqual(Array.from(comp.prefs.tagRecency), ['fresh', 'old']);
+});
+
+test('recordTagUse re-floats a known tag and caps the list at 30', () => {
+  const comp = newComp();
+  for (let i = 0; i < 32; i++) comp.recordTagUse('t' + i);
+  assert.equal(comp.prefs.tagRecency.length, 30, 'capped');
+  comp.recordTagUse('t5');
+  assert.equal(comp.prefs.tagRecency[0], 't5', 're-floated, not duplicated');
+  assert.equal(comp.prefs.tagRecency.filter(t => t === 't5').length, 1);
+});
+
+test('recentTags returns the top 5, minus tags already chips in the editor', () => {
+  const comp = newComp();
+  comp.prefs.tagRecency = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
+  comp.cardEditor.tags = ['b'];
+  assert.deepEqual(Array.from(comp.recentTags('card')), ['a', 'c', 'd', 'e', 'f']);
+});
+
+test('with nothing recorded yet, recentTags falls back to tags off the newest cards', () => {
+  const comp = newComp();
+  comp.prefs.tagRecency = [];
+  comp.cards = [
+    { id: '1', title: 'Older', savedAt: 100, tags: ['history'], highlights: [{ id: 'h1', text: 'x', tags: ['empire'] }] },
+    { id: '2', title: 'Newer', savedAt: 200, tags: ['physics'], highlights: [] },
+  ];
+  assert.deepEqual(Array.from(comp.recentTags('note')), ['physics', 'history', 'empire'],
+    'newest card first; highlight tags count too');
+});
+
+test('pickRecentTag adds the chip, floats the tag, and closes the menu', () => {
+  const comp = newComp();
+  comp.prefs.tagRecency = ['a', 'b'];
+  comp.tagMenu = { open: true, target: 'note', id: 'note' };
+  comp.pickRecentTag('note', 'b');
+  assert.deepEqual(Array.from(comp.noteDialog.tags), ['b']);
+  assert.equal(comp.prefs.tagRecency[0], 'b');
+  assert.equal(comp.tagMenu.open, false);
+});
