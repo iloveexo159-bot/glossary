@@ -1,0 +1,22 @@
+rules_version = '2';
+
+// Glossary — Firestore security rules (PRD §8.4)
+// The entire data-isolation model lives here: a signed-in user may read and
+// write ONLY their own /users/{uid}/** subtree. A mistake here exposes one
+// user's flashcards to another (a reportable breach), so this file is written
+// and tested before any data-access code is wired.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Everything a user owns — cards, reviewHistory, exports, meta — is nested
+    // under their auth uid. The {document=**} recursive wildcard covers every
+    // subcollection and document beneath it with a single rule.
+    match /users/{uid}/{document=**} {
+      allow read, write: if request.auth != null
+                         && request.auth.uid == uid;
+    }
+
+    // Anything not explicitly matched above is denied by default. No other
+    // top-level collection is readable or writable by clients.
+  }
+}

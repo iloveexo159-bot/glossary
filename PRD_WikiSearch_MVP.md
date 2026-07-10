@@ -1,6 +1,8 @@
 # PRD: Glossary — Distraction-Free Wiki Lookup for Book Readers
 
 > **Build status (2026-07-04):** working prototype in `app/` — search, save, highlight/annotate, flashcards, export, settings, and simulated device pairing are functional. Per the phased build order (§6), the app currently persists to `localStorage`; Firebase sync (Phase 9) and the passive Wikipedia-drift indicator's live checks are the remaining planned work. The visual language is captured in `docs/design.md` (+ `docs/design.html`).
+>
+> **v2 amendment (2026-07-10) — multi-user accounts.** The product is being taken from a *single-user, no-accounts, device-pairing* design to a **multi-user model where each person signs in with a Google account and gets their own isolated flashcards, history, exports, and review data**. This supersedes the single-user assumptions in §2.1, §2.2 (Device Pairing page), §5 (anonymous auth + authorized-devices), §6 (phases 9–10), and §7. **Section 8 is the source of truth for the account model, data model, security rules, quota strategy, compliance, and the phased implementation flow.** Decisions locked with the requester: Google sign-in only; persistent session (no inactivity timeout); accounts *replace* device pairing; self-serve account deletion for users plus Firebase-Console-based admin removal (runbook, no in-app admin panel yet); target scale ~tens of users, staying on Firebase's free (Spark) tier.
 
 ## 1. Executive Summary
 
@@ -46,7 +48,7 @@
 | **Flashcard Detail Page** | Full record for one flashcard. | Saved (frozen) summary + image; card-level note + tags edited inline in an "Add notes & tags" editor, shown as a saved item under "Existing notes" once set; highlighted spans with their notes/tags as uniform saved-item cards; "updated on Wikipedia" badge with a reader-controlled "update saved copy" action; edit/delete controls (hover-revealed on desktop, always-visible on touch). | Where annotation actually happens — adding, editing, or removing highlights, notes, and tags after the initial save. Text selection is precise mouse drag-select on desktop; touch adds a tap-to-select-sentence shortcut alongside manual drag, since dragging is inherently less precise on a touchscreen. |
 | **Export Page (sheet/modal)** | Appears from the Collection page once cards are selected under the Export action. | Selected-card summary; export-format confirmation; download trigger. | Bundle selected flashcards into Markdown (with embedded images) for Obsidian/Notion, understanding this hands off a file rather than syncing directly into either tool. |
 | **Settings Page** | App-wide, per-device preferences. | Theme toggle; brightness/warmth sliders; font size; JSON backup/restore; sync status; paired-devices list with a revoke action; link to Device Pairing. | Central place for anything that isn't a daily action, and the place to audit which devices currently have sync access. |
-| **Device Pairing Page** | Shown when linking a new device, or reached from Settings to manage existing ones. | One-time pairing code display/entry; sync status confirmation; list of currently authorized devices with individual revoke controls. | Link a new device to the same Firebase-synced dataset without a traditional login, and remove access from a device you no longer trust. |
+| ~~**Device Pairing Page**~~ *(v1 — removed in v2, see §8.2)* | Was: shown when linking a new device. | — | **Replaced by Google sign-in.** In v2 there is a **Login page** (`/login`, "Continue with Google") and an account menu (Sign out, Delete account) instead. Signing in on a device is what links it; there are no pairing codes. |
 
 ### 2.3 Mobile and Desktop Parity
 
@@ -150,8 +152,8 @@ The frontend stays a zero-build static site; the one real backend piece is Fireb
 | Structure/style/logic | Plain HTML/CSS with Alpine.js (~15KB, no build step) for interactive state | Card modes, multi-select, and inline popups mean real interactive state; Alpine's declarative bindings (`x-data`, `x-show`, etc.) keep the screen in sync with that state automatically, reducing handwritten bookkeeping code — the kind of subtle bug that's hardest to catch in a project you're not reading line-by-line yourself. |
 | Data source (primary) | Wikipedia REST API (`/api/rest_v1/page/summary/{title}`) for intro + image; Action API `opensearch` for live suggestions/disambiguation | Free, keyless, CORS-accessible directly from client JS — no proxy server needed. |
 | Data source (dictionary fallback) | Free Dictionary API (`dictionaryapi.dev`) for definitions, IPA phonetic, and audio; Datamuse (`api.datamuse.com`, `ml=`) for synonyms | When Wikipedia has no usable article (a 404, or a low-value disambiguation stub), the lookup falls back to a dictionary definition instead of dead-ending. Both APIs are free, keyless, and CORS-accessible from the browser — preserving the no-backend architecture. Datamuse covers the synonym gap because dictionaryapi.dev's own synonym arrays are sparse for exactly the uncommon words that miss Wikipedia. Source is the *only* thing that distinguishes a dictionary card from a Wikipedia one — highlighting, notes, tags, review, and export are identical (drift-tracking is skipped, since a dictionary entry has no Wikipedia revision). |
-| Flashcard storage & sync | Firebase Firestore (Web SDK, offline persistence enabled) | Firestore's client SDK caches data locally and syncs automatically in the background when a connection is available — this replaces what would otherwise be a custom local-database-plus-manual-merge system. Stores flashcards and the authorized-devices list only; free (Spark) tier daily quotas are far beyond single-user usage. |
-| Device identity & pairing | Firebase Anonymous Authentication + a one-time pairing code, backed by an authorized-devices document per dataset | No email/password login ever. A new device generates its own anonymous identity; entering a short-lived code shown on an already-paired device adds it to the authorized list. Removing a device from that list (and having Firestore rules check membership) is what makes revoke actually effective, not just a hidden button. |
+| Flashcard storage & sync | Firebase Firestore (Web SDK, offline persistence enabled) | Firestore's client SDK caches data locally and syncs automatically in the background when a connection is available — this replaces what would otherwise be a custom local-database-plus-manual-merge system. **v2 (§8.3):** each user's flashcards, review history, and exports are namespaced under `users/{uid}/…` (one document per card), isolated by security rules. The free (Spark) tier's write quota is a *shared* bucket across all users, so the §8.5 batching is what keeps ~tens of users at $0. |
+| User identity & auth | Firebase Authentication — **Google sign-in only** (§8.2) | Replaces v1's anonymous auth + device-pairing model. Google supplies a stable `uid`, verified email, and name; the app stores no passwords. Persistent session, no inactivity timeout. Identity is the sync boundary — signing in on a device is what "pairs" it. |
 | Local-only preferences | `localStorage`, not Firestore | Theme, brightness/warmth, and font size are per-device by design and never sync — see Section 2.1. |
 | Ephemeral lookup cache | Local-only (IndexedDB or Cache API), separate from Firestore | Previously-viewed (but not saved) Wikipedia summaries don't need to sync across devices — keeping this local-only avoids syncing throwaway data. |
 | Markdown export | `turndown` (HTML→Markdown) + `jszip` + `file-saver`, pinned to fixed versions | Converts Wikipedia's HTML summary to clean Markdown; bundles multi-card exports into one `.zip`; triggers the browser download. Pinning avoids an unreviewed upstream update silently changing behavior in a project with no test suite. |
@@ -174,8 +176,8 @@ Build in small, independently-testable slices; test each one in the actual brows
 6. **Markdown export.** Turndown + JSZip + file-saver: single-card export first, then multi-select bulk export.
 7. **Theming.** Dark/light toggle, then brightness/warmth sliders and font-size control — stored in `localStorage`, per device.
 8. **PWA polish.** Manifest, service worker, offline cache of past lookups, install prompts tailored per platform (iOS "Add to Home Screen," macOS "Add to Dock," Android's automatic banner, desktop Chrome/Edge's address-bar icon), CSP meta tag. Run a Lighthouse PWA audit to confirm installability rather than assuming it.
-9. **Firebase integration.** Anonymous auth; Firestore schema including an authorized-devices document; security rules scoped to that document (this is the highest-severity piece to get right — see Section 7); swap local-only flashcard storage for Firestore with offline persistence.
-10. **Device pairing and management.** One-time code generation/entry to link a second device; a paired-devices list in Settings with a working revoke action, enforced via the Firestore rules from Phase 9, not just hidden in the UI.
+9. **Multi-user accounts & cloud sync (v2 — see Section 8).** *Supersedes the original single-user Firebase/pairing phases.* Google-only Firebase Auth; per-user Firestore schema (`users/{uid}/…`, one doc per card); `uid`-scoped security rules written and tested first (highest-severity — §7/§8.4); swap local flashcard storage for Firestore with the §8.5 write-optimisations; three-state auth UI with a `/login` page and route guards; first-login `localStorage`→account migration.
+10. **Account lifecycle & compliance (v2 — see Section 8).** *Replaces device pairing/management.* Self-serve account deletion (recursive data purge + Auth delete); Privacy Policy + short ToS; owner's Firebase-Console account-removal runbook. Device pairing and one-time codes are removed — signing in is what links a device.
 11. **Passive Wikipedia-drift indicator.** On-view-only check, badge only, no auto-replace.
 12. **Deploy + cross-platform test.** Push to GitHub Pages (optionally via GitHub Actions); test on an Android phone (Chrome), an iPhone (Safari), and desktop (Chrome/Edge, plus Safari on a Mac if applicable — the same storage-eviction risk applies there); confirm sync and revoke both work between an actual phone and an actual laptop.
 
@@ -193,8 +195,8 @@ Build in small, independently-testable slices; test each one in the actual brows
 
 **Security**
 
-- Firestore access must be restricted by security rules to only the anonymous device identities present in a dataset's authorized-devices document — never left open, even though it's a personal single-user app. This is the single highest-severity thing in the whole build to get right.
-- Revoking a device must be enforced by the Firestore rules (removing it from the authorized list), not just by hiding a button in the UI — a client-side-only revoke would leave the old device's access technically intact.
+- **(v2 — §8.4)** Firestore access must be restricted by security rules so a user can read and write **only their own** `users/{uid}/…` subtree (`request.auth.uid == uid`) — never left open. With multiple users this is the single highest-severity thing in the whole build to get right: a wrong rule exposes one user's data to another, which is a reportable breach, not just a bug. Rules are written and tested before any data-access code.
+- **(v2)** Because every user draws on the *same* free-tier write quota, the §8.5 write-batching (per-card docs, one write per review session, debounced edits) is a reliability control, not just an optimisation — an unbatched loop that's invisible at one user can exhaust the shared daily quota once a few accounts are active.
 - A Firebase web API key is not a secret by design (Firebase's own security model relies on rules, not on hiding the key) — don't spend effort trying to hide it; spend the effort on getting the security rules right instead.
 - Sanitize or escape any HTML pulled from Wikipedia's summary response before inserting it into the page, and set a Content-Security-Policy meta tag as a second layer of defense — treat externally-sourced content as untrusted by default, even from a generally reliable source like Wikipedia. The CSP's `connect-src` is an explicit allow-list, so any new data source (the dictionary/synonym APIs, `api.dictionaryapi.dev` + `api.datamuse.com`, plus `media-src` for pronunciation audio) must be added there or the browser silently blocks the fetch — a failure mode invisible to server-side API tests.
 - Add a simple client-side debounce/guard against rapid duplicate writes (e.g. a bug causing a retry loop), rather than relying solely on Firestore's own daily quota as the safety net.
@@ -209,10 +211,114 @@ Build in small, independently-testable slices; test each one in the actual brows
 | The same term gets saved multiple times over months/years, cluttering the glossary | Save checks the canonical Wikipedia title against existing flashcards and opens the existing card instead of duplicating. |
 | Wikipedia summary HTML contains unexpected markup (XSS risk) | Sanitize/escape before rendering; CSP meta tag as a second layer; never insert raw HTML directly. |
 | Tag-name drift (e.g. "Sapiens" vs. "sapiens") weakens book/subject grouping | Tag autocomplete against previously-used tags. |
-| Misconfigured Firestore security rules expose data | Rules scoped to the authorized-devices document; reviewed explicitly in Phase 9, not assumed correct by default. |
+| **(v2)** Misconfigured Firestore rules let one user read another's data (reportable breach) | Rules scoped to `users/{uid}` with `request.auth.uid == uid` (§8.4); written and tested *before* data code, not assumed correct by default. |
+| **(v2)** Shared free-tier write quota exhausted by unbatched writes across users | Per-card documents, one write per review session, debounced edits, single listener (§8.5); existing duplicate-write debounce retained. |
+| **(v2)** Holding other users' personal data creates erasure/privacy obligations | Self-serve account deletion (recursive purge + Auth delete) and owner Console runbook; Privacy Policy + ToS; Google-only auth so no passwords are ever stored (§8.6–8.7). |
 | Highlighting text accidentally creates unwanted flashcards | Explicit "Highlight & save" confirm action, not an automatic save on any text selection. |
 | Data loss before a second device is paired | Manual JSON export/import as a secondary backup, independent of Firebase. |
 | A runaway client bug burns through Firestore's daily free-tier quota | Client-side debounce/guard against duplicate rapid writes. |
 | Export expectations mismatch — a loose file, not a live vault sync; Notion doesn't parse frontmatter into properties like Obsidian does | Documented as a known, accepted limitation of a no-backend architecture rather than left as a silent surprise. |
 | Solo, first-time-coder build stalls on an unfamiliar error | Small phased build order; DevTools-error-paste workflow; commit after every working phase. |
 | Wikipedia API changes or informal rate-limiting | Use documented, stable REST endpoints; descriptive User-Agent; personal-use volume is far below any realistic limit. |
+
+## 8. Multi-User Accounts & Cloud Sync (v2)
+
+This section supersedes the single-user assumptions elsewhere in the PRD. Where v1 treated the app as one person's data spread across paired peer devices, v2 makes **identity the sync boundary**: a user signs in with Google on any device and sees exactly their own flashcards, recent searches, exports, and review history — and nobody else's.
+
+### 8.1 Why the pivot, and what it costs
+
+The v1 design deliberately avoided accounts to keep compliance and cost at zero. Real multi-user support reverses three of those choices on purpose: you become a **data controller** for other people's data, you take on a small **compliance surface** (§8.7), and Firestore's free-tier write quota becomes a **shared bucket** across all users (§8.5). The locked scope keeps the bill at **$0**: Google-only auth (no passwords to store), a persistent session (no server-side session store), account deletion handled in-app for users and via the Firebase Console for the owner (no Cloud Functions, so no Blaze billing plan required).
+
+### 8.2 Account model and the three auth states
+
+- **Auth provider:** Firebase Authentication with **Google sign-in only**. No email/password, no anonymous auth. Firebase supplies a stable `uid`, a verified email, and a display name — the app stores no credentials itself.
+- **Session:** persistent (Firebase's default `browserLocalPersistence`). A user stays signed in until they explicitly sign out; there is no inactivity timeout. "Sign out" is a manual control in the account menu.
+- **Pairing removed:** the v1 Device Pairing page and its one-time codes are dropped entirely. Signing in *is* pairing. A read-only "signed-in sessions" list may appear later but is not required for launch.
+- **The UI has exactly three auth states**, driven by one reactive `authState` value:
+
+```mermaid
+flowchart LR
+    Load(["App loads"]) --> Pending["pending<br/>(auth resolving)"]
+    Pending -->|"no user"| Out["signedOut<br/>login icon, /login page"]
+    Pending -->|"user found"| In["signedIn<br/>account menu, user's data loaded"]
+    Out -->|"Continue with Google"| In
+    In -->|"Sign out"| Out
+```
+
+`pending` must render a neutral skeleton, **not** the logged-out screen, or the app will flash the wrong UI on every load before Firebase resolves the session. Route guards on Collection / Review / Settings redirect to `/login` when `signedOut`.
+
+### 8.3 Data model
+
+Every piece of user data is namespaced under the owner's `uid`, and **one flashcard is one Firestore document** (not one giant array — see §8.5):
+
+```
+users/{uid}/cards/{cardId}          ← one doc per flashcard (title, extract, note, tags, highlights, timestamps, source, drift)
+users/{uid}/reviewHistory/{sessionId}  ← one doc per completed review session (verdicts, score, date)
+users/{uid}/exports/{exportId}      ← one doc per export event (card ids, format, timestamp)
+users/{uid}/meta/recent             ← recent-search list (see note below)
+```
+
+Kept **local-only** (never written to Firestore), consistent with v1's intent:
+
+- **Preferences** (`theme`, `brightness`, `warmth`, `fontScale`) — per-device by design (§2.1), stay in `localStorage`.
+- **Ephemeral lookup cache** — the 60-entry summary cache stays local; throwaway data must not consume sync quota.
+- **Recent searches** — default to local; sync only if the requester wants recents to follow them across devices (a per-search write, so kept off the network by default).
+
+### 8.4 Security rules (highest-severity item)
+
+Data isolation is enforced by Firestore rules, not by the client. This is the single most important thing to get right — a wrong rule lets one user read another's data, which is a reportable breach (§8.7), not merely a bug:
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}
+```
+
+Rules are written and tested **before** any data-access code is wired. The Firebase web API key is not a secret (§7) — effort goes into the rules, not into hiding the key.
+
+### 8.5 Quota and write-optimisation
+
+The v1 app is optimised for `localStorage`, where writes are free and synchronous, so it persists eagerly on nearly every state change. Ported naively, each of those becomes a billable Firestore write against a **shared** free-tier bucket (~20K writes / 50K reads / 20K deletes per day across *all* users). At the ~tens-of-users target these fixes are what keep the app free:
+
+- **Card = one doc:** replace the whole-array `persistCards()` write with a single-doc `update()` for the card that changed.
+- **Batch review sessions:** the v1 code persists on *every card flip* (`markReviewed`). Collect a session's results and commit **one** write at `finishSession()`.
+- **Fix redundant drift writes:** v1 `checkDrift()` persists on *every lookup* even when nothing changed — write only when a drift flag actually flips.
+- **Debounce edits:** note/tag edits debounce (~500 ms–1 s) so typing isn't one write per change.
+- **One listener, attached once:** subscribe to the user's collections with a single `onSnapshot` when `signedIn`; detach on `signOut`. Never re-attach per route.
+- **Keep the guard from §7:** the existing client-side debounce against runaway duplicate writes remains, now doubly important with multiple users on one quota.
+
+### 8.6 Account lifecycle
+
+- **First-login migration:** on a user's first sign-in, detect any flashcards sitting in this browser's `localStorage` and offer to import them into the account (dedupe by canonical title; the merge rule when both local and cloud hold the same title is a deliberate build-time choice).
+- **User self-deletion:** the account menu offers "Delete my account and all my data," which recursively deletes `users/{uid}/**` and then the Auth record. This closes the GDPR/PDPA right-to-erasure gap for every user without any admin involvement.
+- **Owner/admin removal (Console runbook, no code):** the project owner removes an abusive or stale account via the Firebase Console — delete the Auth user, then delete their `users/{uid}` subtree (or install the official "Delete User Data" extension to cascade automatically). An in-app admin panel (Cloud Functions + an `admin` custom claim + a users list) is deferred until the user count outgrows manual management; it is purely additive and reuses the same recursive-delete logic.
+
+### 8.7 Compliance
+
+Accounts turn the app from "nothing leaves the device" into a service holding other people's personal data on Google's infrastructure. New obligations (PDPA in Singapore; GDPR for any EU user):
+
+- **Privacy Policy** (required): what's stored (Google profile email/name, flashcards and their content, review/export history), that it lives in Firebase (a Google sub-processor), and why.
+- **Terms of Service** (short): acceptable use and a liability disclaimer, since others now rely on the service.
+- **Consent / lawful basis:** a signup acknowledgement referencing the policy.
+- **Right to erasure & portability:** self-deletion (§8.6) covers erasure; the existing JSON export (`exportJson`) already covers portability.
+- **Breach posture:** the §8.4 rules are now a legal control, not just code — misconfiguration is a reportable incident.
+- **Data minimisation:** Google-only sign-in means the app never stores passwords, deliberately shrinking the liability surface.
+
+### 8.8 Implementation flow (Phases A–E)
+
+Estimates assume Claude Code writes the code and the requester handles Firebase-Console setup and the real-device testing loop; ranges are dominated by testing and the two genuine risk areas (rules, migration), not raw coding. Total ≈ **4–5 focused days**, all on the free tier.
+
+| Phase | Scope | Est. |
+|---|---|---|
+| **A — Firebase foundation** | Create project; enable **Google** auth provider; register the web app; add pinned Firebase SDK to `index.html`; init Auth + Firestore with offline persistence; **write and test the §8.4 security rules first**. | ~0.5 day |
+| **B — Data layer** | Replace `lsGet/lsSet` for cloud collections with a Firestore adapter that bakes in the §8.5 optimisations (per-card docs, batched sessions, debounced edits, single listener); keep cache/prefs/recent local. | 1–2 days |
+| **C — Auth UI** | Three-state `authState`; `/login` page with a single "Continue with Google" button; top-bar login/account icon; account menu + Sign out; route guards; listener attach/detach lifecycle. | ~0.5–1 day |
+| **D — Migration & compliance** | First-login `localStorage`→account import; self-serve account deletion (recursive purge + Auth delete); Privacy Policy + short ToS pages. | ~1 day |
+| **E — Docs, deploy & admin runbook** | Sync this PRD, `docs/design.md`, and `docs/design.html` to the shipped account UI; write the owner's Console-based account-removal runbook; deploy; test sign-in and data isolation across two real devices. | ~0.5 day |
+
+Each phase is committed as its own working slice (§7). A tag is placed before Phase B (the largest architectural jump), as v1 recommended for the Firebase step.
