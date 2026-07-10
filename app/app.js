@@ -11,6 +11,7 @@ const LS = {
   prefs: 'glossary.prefs',
   cache: 'glossary.cache',
   devices: 'glossary.devices',
+  importOffered: 'glossary.importOffered', // + '.' + uid — one ask per account per device
 };
 
 function lsGet(key, fallback) {
@@ -79,6 +80,11 @@ function glossaryApp() {
     // batch. Signed out, everything stays in localStorage exactly as before.
     syncError: false,
     _unsubCards: null, _synced: {}, _syncTimer: null,
+    // first-login migration (PRD §8.6): after sign-in, once the account deck
+    // has arrived, offer — once per account per device — to import the cards
+    // this browser saved before signing in. Never automatic (shared machines).
+    importOffer: { show: false, count: 0 },
+    _pendingImportCheck: false,
     toast: '', _toastTimer: null, _sugTimer: null, _selChangeTimer: null,
     announce: '', _announceTimer: null,
 
@@ -124,6 +130,7 @@ function glossaryApp() {
       // including the inline `exportSheet = false` handlers in the HTML
       this.$watch('noteDialog.show', open => this.syncDialogFocus(open));
       this.$watch('exportSheet', open => this.syncDialogFocus(open));
+      this.$watch('importOffer.show', open => this.syncDialogFocus(open));
       // lookup lifecycle is otherwise silent to assistive tech
       this.$watch('resultState', s => {
         if (s === 'loading') this.announceLive('Looking up…');
@@ -1308,6 +1315,12 @@ function glossaryApp() {
         title: raw.title.trim(),
         extract: typeof raw.extract === 'string' ? raw.extract : '',
         note: typeof raw.note === 'string' ? raw.note : '',
+        // dictionary-card fields (post-98c9039 cards) — dropped silently before,
+        // which stripped the source badge and pronunciation on import
+        source: raw.source === 'dictionary' ? 'dictionary' : 'wikipedia',
+        phonetic: typeof raw.phonetic === 'string' ? raw.phonetic : '',
+        audio: (typeof raw.audio === 'string' && /^https:\/\//.test(raw.audio)) ? raw.audio : null,
+        synonyms: Array.isArray(raw.synonyms) ? raw.synonyms.filter(s => typeof s === 'string' && s.trim()).slice(0, 20) : [],
         image: (typeof raw.image === 'string' && /^https:\/\/upload\.wikimedia\.org\//.test(raw.image)) ? raw.image : null,
         imageW: num(raw.imageW),
         imageH: num(raw.imageH),
@@ -1390,6 +1403,7 @@ function glossaryApp() {
             this.stopCardsListener();
             this.cards = [];            // cloud deck arrives via the snapshot
             this.syncCardEditor(null);
+            this._pendingImportCheck = true; // offer the local-deck import once the account deck lands
             this.startCardsListener();
           } else if (!u && prevUid) {
             this.stopCardsListener();
@@ -1507,6 +1521,12 @@ function glossaryApp() {
       server.forEach(s => { next[s.id] = this._stableJson(s); });
       this._synced = next;
       this.cards = merged;
+      // migration check waits for the FIRST snapshot: only with the account
+      // deck in hand can "which local cards are actually new" be answered
+      if (this._pendingImportCheck) {
+        this._pendingImportCheck = false;
+        this.maybeOfferImport();
+      }
     },
     scheduleCloudSync() {
       clearTimeout(this._syncTimer);
@@ -1546,6 +1566,42 @@ function glossaryApp() {
         this.showToast('⚠ Sync failed — changes kept on this device, will retry');
       }
     },
+    /* ---------- first-login migration (PRD §8.6, Phase D) ----------
+       The signed-out deck (localStorage) never auto-merges into an account.
+       Instead: one dialog per account per device offering the import, plus a
+       manual "Import this device's cards" action in Settings as the catch-up
+       path. Cards go through sanitizeCard (fresh ids, coerced fields — the
+       same untrusted-input door the JSON import uses) and dedupe by title. */
+    localOnlyCards() {
+      return lsGet(LS.cards, [])
+        .map(c => this.sanitizeCard(c))
+        .filter(c => c && !this.findByTitle(c.title));
+    },
+    maybeOfferImport() {
+      if (!this.cloudMode()) return;
+      if (lsGet(LS.importOffered + '.' + this.user.uid, false)) return;
+      const fresh = this.localOnlyCards();
+      if (!fresh.length) { this.markImportOffered(); return; } // nothing to ask about
+      this.importOffer = { show: true, count: fresh.length };
+    },
+    markImportOffered() {
+      if (this.user) lsSet(LS.importOffered + '.' + this.user.uid, true);
+    },
+    /* Shared by the sign-in dialog's Import button and the Settings action. */
+    importDeviceCards() {
+      const fresh = this.localOnlyCards();
+      this.importOffer = { show: false, count: 0 };
+      this.markImportOffered();
+      if (!fresh.length) { this.showToast('Nothing new to import — all cards are already in your account'); return; }
+      this.cards.push(...fresh);
+      this.persistCards();
+      this.showToast(`✓ ${fresh.length} card${fresh.length === 1 ? '' : 's'} added to your account`);
+    },
+    skipImport() {
+      this.importOffer = { show: false, count: 0 };
+      this.markImportOffered();
+    },
+
     /* Review history: ONE write per finished session (§8.5), never per flip. */
     recordReviewHistory() {
       if (!this.cloudMode()) return;
