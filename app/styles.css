@@ -128,6 +128,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   /* narrow screens: bottom nav already links Home — drop the wordmark so the
      top-bar search keeps a usable width next to back + settings */
   .top-bar .brand { display: none; }
+  /* .top-links carried the margin-left:auto that pins the right cluster;
+     with it hidden, Settings takes over so Settings + Account stay pinned
+     to the right edge on searchless pages (home, settings, account) */
+  .settings-btn { margin-left: auto; }
 }
 
 .icon-btn {
