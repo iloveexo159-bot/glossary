@@ -733,6 +733,11 @@
         <p class="muted login-note" style="margin:0 0 var(--space-base);">Your flashcards, review history and exports sync to this account.</p>
         <p class="muted login-note" x-show="syncError" x-cloak style="margin:0 0 var(--space-base);">⚠ Some changes haven’t synced yet — they’re kept on this device and will retry.</p>
         <button class="btn-outline" @click="signOutUser()">Sign out</button>
+        <!-- lowest visual weight for the most destructive verb (same hierarchy
+             rule as the selection bar): text button, confirm-guarded dialog -->
+        <div style="margin-top:var(--space-lg);padding-top:var(--space-base);border-top:1px solid var(--color-border);">
+          <button class="btn-text" @click="deleteDialog.show = true">DELETE ACCOUNT &amp; DATA</button>
+        </div>
       </div>
     </div>
   </section>
@@ -831,6 +836,28 @@
     <div class="actions">
       <button class="btn-text" @click="skipImport()">NOT NOW</button>
       <button class="btn-primary" @click="importDeviceCards()">Add to account</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ DELETE-ACCOUNT DIALOG ============ -->
+<div class="scrim" x-show="deleteDialog.show" x-cloak @keydown.escape.window="deleteDialog.show && !deleteDialog.busy && (deleteDialog.show = false)">
+  <div class="dialog" role="dialog" aria-modal="true" aria-label="Delete account" @keydown.tab="trapTab($event)">
+    <div class="head"><b>Delete account</b><button class="btn-text" :disabled="deleteDialog.busy" @click="deleteDialog.show = false" aria-label="Close">✕</button></div>
+    <p style="font-family:var(--font-sans);font-size:var(--type-ui-size);">This permanently erases, with no way back:</p>
+    <ul style="font-family:var(--font-sans);font-size:var(--type-ui-size);padding-left:1.25rem;">
+      <li>every flashcard in your account (<b x-text="cards.length"></b> right now), with all notes and highlights</li>
+      <li>your review history and export log</li>
+      <li>your Google sign-in link to Glossary</li>
+    </ul>
+    <p class="muted" style="font-family:var(--font-sans);font-size:var(--type-caption-size);">
+      Cards saved on a device while signed out are not part of your account and stay on that device.
+      You may be asked to sign in once more to confirm it’s you.
+    </p>
+    <div class="actions">
+      <button class="btn-text" :disabled="deleteDialog.busy" @click="deleteDialog.show = false">CANCEL</button>
+      <button class="btn-primary" :disabled="deleteDialog.busy" @click="deleteAccount()"
+              x-text="deleteDialog.busy ? 'Deleting…' : 'Permanently delete'"></button>
     </div>
   </div>
 </div>

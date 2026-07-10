@@ -13,11 +13,11 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js';
 import {
   getAuth, GoogleAuthProvider, onAuthStateChanged,
-  signInWithPopup, signOut,
+  signInWithPopup, signOut, deleteUser, reauthenticateWithPopup,
 } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
 import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
-  collection, doc, setDoc, writeBatch, onSnapshot,
+  collection, doc, setDoc, writeBatch, onSnapshot, getDocs,
 } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
 
 const firebaseConfig = {
@@ -41,8 +41,8 @@ try {
   // Bridge module → global: app.js is a classic script and reads from here.
   window.GlossaryFirebase = {
     app, auth, db, googleProvider,
-    onAuthStateChanged, signInWithPopup, signOut,
-    collection, doc, setDoc, writeBatch, onSnapshot,
+    onAuthStateChanged, signInWithPopup, signOut, deleteUser, reauthenticateWithPopup,
+    collection, doc, setDoc, writeBatch, onSnapshot, getDocs,
   };
   window.dispatchEvent(new CustomEvent('glossary-firebase-ready'));
 } catch (err) {

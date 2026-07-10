@@ -85,6 +85,9 @@ function glossaryApp() {
     // this browser saved before signing in. Never automatic (shared machines).
     importOffer: { show: false, count: 0 },
     _pendingImportCheck: false,
+    // self-serve account deletion (PRD §8.6): dialog explains what's erased;
+    // busy guards the confirm button while the purge runs.
+    deleteDialog: { show: false, busy: false },
     toast: '', _toastTimer: null, _sugTimer: null, _selChangeTimer: null,
     announce: '', _announceTimer: null,
 
@@ -131,6 +134,7 @@ function glossaryApp() {
       this.$watch('noteDialog.show', open => this.syncDialogFocus(open));
       this.$watch('exportSheet', open => this.syncDialogFocus(open));
       this.$watch('importOffer.show', open => this.syncDialogFocus(open));
+      this.$watch('deleteDialog.show', open => this.syncDialogFocus(open));
       // lookup lifecycle is otherwise silent to assistive tech
       this.$watch('resultState', s => {
         if (s === 'loading') this.announceLive('Looking up…');
@@ -1600,6 +1604,51 @@ function glossaryApp() {
     skipImport() {
       this.importOffer = { show: false, count: 0 };
       this.markImportOffered();
+    },
+
+    /* ---------- account deletion (PRD §8.6, Phase D) ----------
+       Right to erasure, self-served: purge every per-user collection, then
+       delete the Auth user. Runs client-side with the user's own credentials —
+       exactly the scope the security rules grant (no Cloud Functions on the
+       free plan). Signed-out decks on devices are local property and stay. */
+    async deleteAccount() {
+      if (!this.cloudMode() || this.deleteDialog.busy) return;
+      const fb = window.GlossaryFirebase;
+      const uid = this.user.uid;
+      this.deleteDialog.busy = true;
+      try {
+        await this.flushCloudSync();   // don't purge around an in-flight edit
+        this.stopCardsListener();      // reads will lose permission mid-purge
+        for (const colName of ['cards', 'reviewHistory', 'exports']) {
+          const snap = await fb.getDocs(fb.collection(fb.db, 'users', uid, colName));
+          const refs = [];
+          snap.forEach(d => refs.push(d.ref));
+          // Firestore batches cap at 500 ops — chunk well under it
+          for (let i = 0; i < refs.length; i += 400) {
+            const batch = fb.writeBatch(fb.db);
+            refs.slice(i, i + 400).forEach(r => batch.delete(r));
+            await batch.commit();
+          }
+        }
+        try {
+          await fb.deleteUser(fb.auth.currentUser);
+        } catch (err) {
+          if (err?.code !== 'auth/requires-recent-login') throw err;
+          // destructive auth ops demand a fresh credential — re-prove identity
+          // inline (one popup) and retry once instead of dead-ending the user
+          await fb.reauthenticateWithPopup(fb.auth.currentUser, fb.googleProvider);
+          await fb.deleteUser(fb.auth.currentUser);
+        }
+        // onAuthStateChanged flips to signedOut and restores the local deck
+        this.deleteDialog = { show: false, busy: false };
+        this.showToast('✓ Account deleted — your cloud data has been erased');
+      } catch (err) {
+        console.error('[Glossary] account deletion failed:', err);
+        this.deleteDialog.busy = false;
+        this.showToast('⚠ Deletion didn’t complete — you’re still signed in, try again');
+        // keep the app usable after a failed attempt
+        if (this.cloudMode() && !this._unsubCards) this.startCardsListener();
+      }
     },
 
     /* Review history: ONE write per finished session (§8.5), never per flip. */
