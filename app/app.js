@@ -1285,20 +1285,16 @@ function glossaryApp() {
         return path;
       } catch { return null; }
     },
-    async doExport() {
+    async doExport(mode = 'download') {
       const chosen = this.cards.filter(c => this.selected.includes(c.id));
       if (!chosen.length) return;
+      if (mode === 'email') return this.doEmailExport(chosen);
       const anyImage = chosen.some(c => c.image);
       if (chosen.length === 1 && (!anyImage || !window.JSZip)) {
         this.downloadBlob(new Blob([this.buildMarkdown(chosen[0])], { type: 'text/markdown' }),
           this.safeFilename(chosen[0].title));
       } else if (window.JSZip) {
-        const zip = new JSZip();
-        for (const c of chosen) {
-          const imgPath = await this.fetchImageInto(zip, c);
-          zip.file(this.safeFilename(c.title), this.buildMarkdown(c, imgPath));
-        }
-        const blob = await zip.generateAsync({ type: 'blob' });
+        const blob = await this.buildExportZip(chosen);
         const name = chosen.length === 1 ? this.safeBase(chosen[0].title) + '.zip' : 'glossary-export.zip';
         this.downloadBlob(blob, name);
       } else {
@@ -1306,7 +1302,64 @@ function glossaryApp() {
         const combined = chosen.map(c => this.buildMarkdown(c)).join('\n\n---\n\n');
         this.downloadBlob(new Blob([combined], { type: 'text/markdown' }), 'glossary-export.md');
       }
-      // stamp what actually went out — feeds the "Exported / Not exported" filter
+      this.finishExport(chosen, '✓ Export downloaded');
+    },
+    async buildExportZip(chosen) {
+      const zip = new JSZip();
+      for (const c of chosen) {
+        const imgPath = await this.fetchImageInto(zip, c);
+        zip.file(this.safeFilename(c.title), this.buildMarkdown(c, imgPath));
+      }
+      return zip.generateAsync({ type: 'blob' });
+    },
+    exportEmailName() {
+      const d = new Date();
+      const pad = n => String(n).padStart(2, '0');
+      return `(${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()}) Glossary Export`;
+    },
+    /* Email export. A browser cannot attach a file to an outgoing email on its
+       own — that needs a mail-sending backend, ruled out on the Spark plan
+       (§8.1). Closest no-infrastructure flow: on phones the zip goes to the
+       native share sheet, where Gmail receives it as a ready attachment; on
+       desktop the zip downloads and a Gmail compose tab opens pre-addressed
+       to the account with the export title as subject — attaching the fresh
+       download is the one manual step. */
+    async doEmailExport(chosen) {
+      if (!window.JSZip) {
+        this.showToast('⚠ Email export needs the zip library — check your connection and reload');
+        return;
+      }
+      const subject = this.exportEmailName();
+      const zipName = subject + '.zip';
+      const isMobile = navigator.userAgentData?.mobile
+        ?? /Android|iPhone|iPad/i.test(navigator.userAgent);
+      const canShareFiles = !!(navigator.canShare
+        && navigator.canShare({ files: [new File([''], zipName, { type: 'application/zip' })] }));
+      // desktop: open the compose tab NOW, inside the click's user activation,
+      // so the popup isn't blocked while the zip builds
+      if (!(isMobile && canShareFiles)) {
+        window.open('https://mail.google.com/mail/?view=cm&fs=1'
+          + '&to=' + encodeURIComponent(this.user?.email || '')
+          + '&su=' + encodeURIComponent(subject)
+          + '&body=' + encodeURIComponent(`Attach "${zipName}" from your downloads folder, then send.`),
+          '_blank');
+      }
+      const blob = await this.buildExportZip(chosen);
+      if (isMobile && canShareFiles) {
+        try {
+          await navigator.share({ files: [new File([blob], zipName, { type: 'application/zip' })], title: subject });
+        } catch (err) {
+          if (err && err.name === 'AbortError') return; // user closed the share sheet — nothing went out
+          this.downloadBlob(blob, zipName); // share refused (target/size) — at least hand over the file
+        }
+        this.finishExport(chosen, '✓ Zip handed to the share sheet');
+      } else {
+        this.downloadBlob(blob, zipName);
+        this.finishExport(chosen, '✓ Zip downloaded — attach it in the Gmail tab');
+      }
+    },
+    // stamp what actually went out — feeds the "Exported / Not exported" filter
+    finishExport(chosen, toastMsg) {
       const now = Date.now();
       chosen.forEach(c => { c.lastExportedAt = now; });
       this.persistCards();
@@ -1314,7 +1367,7 @@ function glossaryApp() {
       this.exportSheet = false;
       this.selectMode = false;
       this.selected = [];
-      this.showToast('✓ Export downloaded');
+      this.showToast(toastMsg);
     },
 
     /* ---------- settings ---------- */

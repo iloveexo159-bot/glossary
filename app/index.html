@@ -921,9 +921,17 @@
     <p class="muted" style="font-family:var(--font-sans);font-size:var(--type-caption-size);">
       This downloads a file you move into Obsidian or Notion yourself. Notion won't parse the frontmatter into page properties; Obsidian will.
     </p>
+    <p class="muted" x-show="authState === 'signedIn'" x-cloak
+       style="font-family:var(--font-sans);font-size:var(--type-caption-size);">
+      EMAIL TO ME bundles everything as one zip. On a phone it goes straight to
+      the share sheet; on a computer it downloads and opens a Gmail draft to
+      <span x-text="user?.email"></span> — attach the downloaded zip to send.
+    </p>
     <div class="actions">
       <button class="btn-text" @click="exportSheet = false">CANCEL</button>
-      <button class="btn-primary" @click="doExport()">Download</button>
+      <button class="btn-text strong" x-show="authState === 'signedIn'" x-cloak
+              @click="doExport('email')">EMAIL TO ME</button>
+      <button class="btn-primary" @click="doExport('download')">Download</button>
     </div>
   </div>
 </div>
