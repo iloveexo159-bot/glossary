@@ -724,6 +724,8 @@
             <span class="muted" x-text="user?.email"></span>
           </div>
         </div>
+        <p class="muted login-note" style="margin:0 0 var(--space-base);">Your flashcards, review history and exports sync to this account.</p>
+        <p class="muted login-note" x-show="syncError" x-cloak style="margin:0 0 var(--space-base);">⚠ Some changes haven’t synced yet — they’re kept on this device and will retry.</p>
         <button class="btn-outline" @click="signOutUser()">Sign out</button>
       </div>
     </div>

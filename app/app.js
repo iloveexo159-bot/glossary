@@ -72,6 +72,13 @@ function glossaryApp() {
     // failed to init (offline first load, CSP block): the app keeps working
     // locally and the login page explains why the button is disabled.
     authState: 'pending', user: null, authUnavailable: false,
+    // cloud sync (PRD §8, Phase B): signed in, cards live in Firestore at
+    // users/{uid}/cards/{cardId} — one doc per card (§8.5). _synced maps each
+    // card id to its last server-known canonical JSON, so persistCards() can
+    // diff out only the docs that actually changed; writes debounce into one
+    // batch. Signed out, everything stays in localStorage exactly as before.
+    syncError: false,
+    _unsubCards: null, _synced: {}, _syncTimer: null,
     toast: '', _toastTimer: null, _sugTimer: null, _selChangeTimer: null,
     announce: '', _announceTimer: null,
 
@@ -85,6 +92,9 @@ function glossaryApp() {
       this.regenCode();
       this.initAuth();
       window.addEventListener('hashchange', () => this.route());
+      // closing the tab inside the 300ms sync debounce would strand the last
+      // edit — hand it to Firestore's offline queue on the way out (best effort)
+      window.addEventListener('pagehide', () => this.flushCloudSync());
       // Touch highlight path: a long-press selection never fires mouseup, so
       // watch selectionchange instead — debounced past the handle-dragging so
       // the toolbar appears once the selection settles. Idempotent for mouse
@@ -536,7 +546,16 @@ function glossaryApp() {
       this.resetEditor(c.id);
       this.showToast('Note & tags removed');
     },
-    persistCards() { return lsSet(LS.cards, this.cards); },
+    /* Single persistence entry point for the deck. Signed out: whole-array
+       localStorage write, exactly as pre-Firebase. Signed in: schedule a
+       debounced diff-sync — only changed card docs are written (§8.5), so
+       callers keep calling this freely after any mutation. Cloud mode always
+       returns true: the localStorage-quota rollback paths don't apply, and
+       cloud failures surface asynchronously via the sync error toast. */
+    persistCards() {
+      if (this.cloudMode()) { this.scheduleCloudSync(); return true; }
+      return lsSet(LS.cards, this.cards);
+    },
     currentCard() { return this.cards.find(c => c.id === this.detailId) || null; },
     cardClick(c) {
       if (this.selectMode) {
@@ -800,7 +819,10 @@ function glossaryApp() {
       this.markReviewed(c.id);
       this.swipeFling(-1);
     },
-    finishSession() { this.session.done = true; },
+    finishSession() {
+      this.session.done = true;
+      this.recordReviewHistory();
+    },
     sessionStats() {
       const total = this.session.ids.length;
       let correct = 0, wrong = 0;
@@ -1236,6 +1258,7 @@ function glossaryApp() {
       const now = Date.now();
       chosen.forEach(c => { c.lastExportedAt = now; });
       this.persistCards();
+      this.recordExport(chosen);
       this.exportSheet = false;
       this.selectMode = false;
       this.selected = [];
@@ -1350,6 +1373,7 @@ function glossaryApp() {
         const fb = window.GlossaryFirebase;
         if (!fb) { this.authState = 'signedOut'; this.authUnavailable = true; return; }
         fb.onAuthStateChanged(fb.auth, u => {
+          const prevUid = this.user?.uid || null;
           this.user = u ? {
             uid: u.uid,
             name: u.displayName || '',
@@ -1357,6 +1381,21 @@ function glossaryApp() {
             photo: u.photoURL || '',
           } : null;
           this.authState = u ? 'signedIn' : 'signedOut';
+          // account boundary: switch the in-memory deck between the account's
+          // cloud collection and this browser's local one. The local deck is
+          // NOT auto-merged into the account (deliberate import is Phase D) —
+          // on a shared machine that would leak this browser's cards into
+          // whoever signs in. localStorage keeps the signed-out deck intact.
+          if (u && u.uid !== prevUid) {
+            this.stopCardsListener();
+            this.cards = [];            // cloud deck arrives via the snapshot
+            this.syncCardEditor(null);
+            this.startCardsListener();
+          } else if (!u && prevUid) {
+            this.stopCardsListener();
+            this.cards = lsGet(LS.cards, []);
+            this.syncCardEditor(null);
+          }
         });
       };
       if (window.GlossaryFirebase !== undefined) wire();
@@ -1393,12 +1432,143 @@ function glossaryApp() {
       const fb = window.GlossaryFirebase;
       if (!fb) return;
       try {
+        await this.flushCloudSync(); // don't strand an edit in the debounce window
         await fb.signOut(fb.auth);
         this.showToast('Signed out');
       } catch (err) {
         console.error('[Glossary] sign-out failed:', err);
         this.showToast('⚠ Couldn’t sign out — try again');
       }
+    },
+
+    /* ---------- cloud data layer (Firestore — PRD §8, Phase B) ----------
+       Model: users/{uid}/cards/{cardId}, one doc per card. this.cards stays
+       the in-memory truth the UI renders; a single onSnapshot listener keeps
+       it aligned with the account, and persistCards() diffs it back out.
+       Firestore's offline persistence (firebase.js) queues writes and serves
+       cached reads, so the flows behave the same offline as localStorage did. */
+    cloudMode() { return this.authState === 'signedIn' && !!this.user && !!window.GlossaryFirebase; },
+    /* Canonical JSON: Firestore returns map keys sorted, local objects keep
+       insertion order — a naive stringify compare would flag every card as
+       changed forever and rewrite the whole collection each save. Sorting keys
+       in the replacer makes the diff stable (and drops undefined, which
+       Firestore rejects). */
+    _stableJson(v) {
+      return JSON.stringify(v, (k, val) =>
+        (val && typeof val === 'object' && !Array.isArray(val))
+          ? Object.keys(val).sort().reduce((o, key) => { o[key] = val[key]; return o; }, {})
+          : val);
+    },
+    _isDirty(c) { return this._stableJson(c) !== this._synced[c.id]; },
+    _cardsCol() {
+      const fb = window.GlossaryFirebase;
+      return fb.collection(fb.db, 'users', this.user.uid, 'cards');
+    },
+    startCardsListener() {
+      if (!this.cloudMode()) return;
+      const fb = window.GlossaryFirebase;
+      this._synced = {};
+      this._unsubCards = fb.onSnapshot(this._cardsCol(),
+        snap => this.applyCardsSnapshot(snap),
+        err => {
+          console.error('[Glossary] cards listener failed:', err);
+          this.syncError = true;
+        });
+    },
+    stopCardsListener() {
+      if (this._unsubCards) { this._unsubCards(); this._unsubCards = null; }
+      clearTimeout(this._syncTimer);
+      this._synced = {};
+      this.syncError = false;
+    },
+    /* Merge rules (local edits vs a snapshot arriving mid-debounce):
+       - dirty local card (edited, flush pending) beats the server copy;
+       - card in _synced but missing locally = deleted here, flush pending —
+         the server copy must not resurrect it;
+       - card with no _synced entry = created here, not acked — keep it;
+       - clean local card missing from the server = deleted remotely — drop it.
+       (Edit-vs-remote-delete resolves as delete wins.) Our own writes come
+       back latency-compensated, so applying a snapshot is idempotent. */
+    applyCardsSnapshot(snap) {
+      const server = [];
+      snap.forEach(d => server.push(d.data()));
+      const local = new Map(this.cards.map(c => [c.id, c]));
+      const merged = server
+        .filter(s => !(this._synced[s.id] !== undefined && !local.has(s.id)))
+        .map(s => {
+          const l = local.get(s.id);
+          return (l && this._isDirty(l)) ? l : s;
+        });
+      const serverIds = new Set(server.map(s => s.id));
+      this.cards.forEach(c => {
+        if (this._synced[c.id] === undefined && !serverIds.has(c.id)) merged.push(c);
+      });
+      const next = {};
+      server.forEach(s => { next[s.id] = this._stableJson(s); });
+      this._synced = next;
+      this.cards = merged;
+    },
+    scheduleCloudSync() {
+      clearTimeout(this._syncTimer);
+      this._syncTimer = setTimeout(() => this.flushCloudSync(), 300);
+    },
+    /* One batch per flush: upsert every dirty card, delete every card that
+       left the deck. _synced is NOT updated here — the snapshot listener is
+       the sole bookkeeper, fed by latency compensation the moment the batch
+       is enqueued. If a write is rejected (rules, quota), Firestore reverts
+       the compensated data, the next snapshot re-marks those cards dirty,
+       and the next persist retries them. */
+    async flushCloudSync() {
+      if (!this.cloudMode()) return;
+      clearTimeout(this._syncTimer);
+      const fb = window.GlossaryFirebase;
+      const batch = fb.writeBatch(fb.db);
+      let ops = 0;
+      const seen = new Set();
+      for (const c of this.cards) {
+        seen.add(c.id);
+        const json = this._stableJson(c);
+        if (json !== this._synced[c.id]) {
+          batch.set(fb.doc(this._cardsCol(), c.id), JSON.parse(json));
+          ops += 1;
+        }
+      }
+      for (const id of Object.keys(this._synced)) {
+        if (!seen.has(id)) { batch.delete(fb.doc(this._cardsCol(), id)); ops += 1; }
+      }
+      if (!ops) return;
+      try {
+        await batch.commit();
+        this.syncError = false;
+      } catch (err) {
+        console.error('[Glossary] cloud sync failed:', err);
+        this.syncError = true;
+        this.showToast('⚠ Sync failed — changes kept on this device, will retry');
+      }
+    },
+    /* Review history: ONE write per finished session (§8.5), never per flip. */
+    recordReviewHistory() {
+      if (!this.cloudMode()) return;
+      const fb = window.GlossaryFirebase;
+      const s = this.sessionStats();
+      const ref = fb.doc(fb.collection(fb.db, 'users', this.user.uid, 'reviewHistory'));
+      fb.setDoc(ref, {
+        finishedAt: Date.now(),
+        total: s.total, correct: s.correct, wrong: s.wrong,
+        skipped: s.skipped, passed: s.passed,
+        verdicts: { ...this.session.verdicts },
+      }).catch(err => console.error('[Glossary] review history write failed:', err));
+    },
+    /* Export log: one small metadata doc per export action (§8.3). */
+    recordExport(chosen) {
+      if (!this.cloudMode()) return;
+      const fb = window.GlossaryFirebase;
+      const ref = fb.doc(fb.collection(fb.db, 'users', this.user.uid, 'exports'));
+      fb.setDoc(ref, {
+        exportedAt: Date.now(),
+        count: chosen.length,
+        titles: chosen.map(c => c.title),
+      }).catch(err => console.error('[Glossary] export log write failed:', err));
     },
 
     /* ---------- toast & live announcements ---------- */

@@ -17,6 +17,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
 import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
+  collection, doc, setDoc, writeBatch, onSnapshot,
 } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
 
 const firebaseConfig = {
@@ -41,6 +42,7 @@ try {
   window.GlossaryFirebase = {
     app, auth, db, googleProvider,
     onAuthStateChanged, signInWithPopup, signOut,
+    collection, doc, setDoc, writeBatch, onSnapshot,
   };
   window.dispatchEvent(new CustomEvent('glossary-firebase-ready'));
 } catch (err) {
