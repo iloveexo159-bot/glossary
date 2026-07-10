@@ -222,11 +222,12 @@
              blocks only coexist once the card is saved -->
         <hr class="section-rule" x-show="resultCard()" x-cloak>
 
-        <!-- Add / edit notes & tags — inline card-level editor. Shown while the
-             card has no saved note yet, or when EDIT re-opens it. Saving clears
-             the input; the note then appears under "Existing notes" below. -->
-        <div class="note-editor" x-show="resultCard() && (!(resultCard().note || resultCard().tags.length) || cardEditor.editing)" x-cloak>
-          <h2 class="heading" style="margin-top:0;" x-text="cardEditor.editing ? 'Edit notes & tags' : 'Add notes & tags'"></h2>
+        <!-- Add notes & tags — inline card-level editor, shown only while the
+             card has no saved note yet. Saving clears the input; the note then
+             appears under "Existing notes" below, where EDIT reworks it in
+             place (never a second copy up here). -->
+        <div class="note-editor" x-show="resultCard() && !(resultCard().note || resultCard().tags.length)" x-cloak>
+          <h2 class="heading" style="margin-top:0;">Add notes &amp; tags</h2>
           <textarea x-model="cardEditor.note" placeholder="Write a note about this term…" aria-label="Card note"></textarea>
           <label class="field-label caption" for="rc-tags">Tags</label>
           <div class="input-tags">
@@ -249,21 +250,51 @@
             </div>
           </div>
           <div class="editor-actions">
-            <button class="btn-text" x-show="cardEditor.editing" x-cloak @click="cancelCardNote()">CANCEL</button>
             <button class="btn-primary" @click="saveCardEditor()">Save notes &amp; tags</button>
           </div>
         </div>
 
-        <!-- Existing notes — the saved card note + tags, then any highlights -->
+        <!-- Existing notes — the saved card note + tags, then any highlights.
+             EDIT flips the card-note item into an in-place editor so the note
+             is never shown twice. -->
         <div x-show="resultCard() && (resultCard().note || resultCard().tags.length || resultCard().highlights.length)" x-cloak>
           <h2 class="heading">Existing notes</h2>
           <div class="hl-item" x-show="resultCard()?.note || resultCard()?.tags.length">
             <div class="caption" style="margin-bottom:var(--space-sm);">Card note</div>
-            <p class="note-text" x-show="resultCard()?.note" x-text="resultCard()?.note"></p>
-            <div class="chip-row">
-              <template x-for="t in (resultCard()?.tags || [])" :key="t"><span class="chip-tag" x-text="'#' + t"></span></template>
-              <button class="btn-text" @click="editCardNote()">EDIT</button>
-              <button class="btn-text" @click="removeCardNote()">REMOVE</button>
+            <div x-show="!cardEditor.editing">
+              <p class="note-text" x-show="resultCard()?.note" x-text="resultCard()?.note"></p>
+              <div class="chip-row">
+                <template x-for="t in (resultCard()?.tags || [])" :key="t"><span class="chip-tag" x-text="'#' + t"></span></template>
+                <button class="btn-text" @click="editCardNote()">EDIT</button>
+                <button class="btn-text" @click="removeCardNote()">REMOVE</button>
+              </div>
+            </div>
+            <div class="note-editor" x-show="cardEditor.editing" x-cloak>
+              <textarea x-model="cardEditor.note" placeholder="Write a note about this term…" aria-label="Card note"></textarea>
+              <label class="field-label caption" for="rce-tags">Tags</label>
+              <div class="input-tags">
+                <template x-for="t in cardEditor.tags" :key="t">
+                  <span class="chip-tag">#<span x-text="t"></span><button class="x" @click="cardEditor.tags = cardEditor.tags.filter(x => x !== t)" :aria-label="'Remove tag ' + t">✕</button></span>
+                </template>
+                <input id="rce-tags" x-model="cardEditor.tagInput" list="all-tags"
+                       placeholder="Add a tag, space to confirm" aria-label="Add a tag"
+                       @keydown="onTagKeydown($event, 'card')">
+                <button class="tag-menu-btn" type="button" aria-label="Show recent tags"
+                        :aria-expanded="(tagMenu.open && tagMenu.id === 'rce') ? 'true' : 'false'"
+                        @click.stop="toggleTagMenu('card', 'rce')">▾</button>
+                <div class="dropdown tag-dropdown" x-show="tagMenu.open && tagMenu.id === 'rce'" x-cloak
+                     @click.outside="tagMenu.open = false">
+                  <div class="head"><span>Recent tags</span></div>
+                  <template x-for="t in recentTags('card')" :key="t">
+                    <button class="row" type="button" @click="pickRecentTag('card', t)">#<span x-text="t"></span></button>
+                  </template>
+                  <div class="empty" x-show="recentTags('card').length === 0">No recent tags yet — type one to start.</div>
+                </div>
+              </div>
+              <div class="editor-actions">
+                <button class="btn-text" @click="cancelCardNote()">CANCEL</button>
+                <button class="btn-primary" @click="saveCardEditor()">Save notes &amp; tags</button>
+              </div>
             </div>
           </div>
           <template x-for="h in (resultCard()?.highlights || [])" :key="h.id">
@@ -597,10 +628,11 @@
         <p class="credit" x-show="currentCard().source!=='dictionary'">via Wikipedia · text available under CC BY-SA · saved copy — never updates on its own</p>
         <p class="credit" x-show="currentCard().source==='dictionary'" x-cloak>Definitions via Free Dictionary API · synonyms via Datamuse · saved copy — never updates on its own</p>
 
-        <!-- Add / edit notes & tags — inline card-level editor. Shown while the
-             card has no saved note yet, or when EDIT re-opens it. -->
-        <div class="note-editor" x-show="!(currentCard().note || currentCard().tags.length) || cardEditor.editing" x-cloak>
-          <h2 class="heading" style="margin-top:0;" x-text="cardEditor.editing ? 'Edit notes & tags' : 'Add notes & tags'"></h2>
+        <!-- Add notes & tags — inline card-level editor, shown only while the
+             card has no saved note yet. EDIT reworks a saved note in place
+             under "Existing notes" below (never a second copy up here). -->
+        <div class="note-editor" x-show="!(currentCard().note || currentCard().tags.length)" x-cloak>
+          <h2 class="heading" style="margin-top:0;">Add notes &amp; tags</h2>
           <textarea x-model="cardEditor.note" placeholder="Write a note about this term…" aria-label="Card note"></textarea>
           <label class="field-label caption" for="dc-tags">Tags</label>
           <div class="input-tags">
@@ -623,7 +655,6 @@
             </div>
           </div>
           <div class="editor-actions">
-            <button class="btn-text" x-show="cardEditor.editing" x-cloak @click="cancelCardNote()">CANCEL</button>
             <button class="btn-primary" @click="saveCardEditor()">Save notes &amp; tags</button>
           </div>
         </div>
@@ -634,11 +665,40 @@
         </p>
         <div class="hl-item" x-show="currentCard().note || currentCard().tags.length" x-cloak>
           <div class="caption" style="margin-bottom:var(--space-sm);">Card note</div>
-          <p class="note-text" x-show="currentCard().note" x-text="currentCard().note"></p>
-          <div class="chip-row">
-            <template x-for="t in currentCard().tags" :key="t"><span class="chip-tag" x-text="'#' + t"></span></template>
-            <button class="btn-text" @click="editCardNote()">EDIT</button>
-            <button class="btn-text" @click="removeCardNote()">REMOVE</button>
+          <div x-show="!cardEditor.editing">
+            <p class="note-text" x-show="currentCard().note" x-text="currentCard().note"></p>
+            <div class="chip-row">
+              <template x-for="t in currentCard().tags" :key="t"><span class="chip-tag" x-text="'#' + t"></span></template>
+              <button class="btn-text" @click="editCardNote()">EDIT</button>
+              <button class="btn-text" @click="removeCardNote()">REMOVE</button>
+            </div>
+          </div>
+          <div class="note-editor" x-show="cardEditor.editing" x-cloak>
+            <textarea x-model="cardEditor.note" placeholder="Write a note about this term…" aria-label="Card note"></textarea>
+            <label class="field-label caption" for="dce-tags">Tags</label>
+            <div class="input-tags">
+              <template x-for="t in cardEditor.tags" :key="t">
+                <span class="chip-tag">#<span x-text="t"></span><button class="x" @click="cardEditor.tags = cardEditor.tags.filter(x => x !== t)" :aria-label="'Remove tag ' + t">✕</button></span>
+              </template>
+              <input id="dce-tags" x-model="cardEditor.tagInput" list="all-tags"
+                     placeholder="Add a tag, space to confirm" aria-label="Add a tag"
+                     @keydown="onTagKeydown($event, 'card')">
+              <button class="tag-menu-btn" type="button" aria-label="Show recent tags"
+                      :aria-expanded="(tagMenu.open && tagMenu.id === 'dce') ? 'true' : 'false'"
+                      @click.stop="toggleTagMenu('card', 'dce')">▾</button>
+              <div class="dropdown tag-dropdown" x-show="tagMenu.open && tagMenu.id === 'dce'" x-cloak
+                   @click.outside="tagMenu.open = false">
+                <div class="head"><span>Recent tags</span></div>
+                <template x-for="t in recentTags('card')" :key="t">
+                  <button class="row" type="button" @click="pickRecentTag('card', t)">#<span x-text="t"></span></button>
+                </template>
+                <div class="empty" x-show="recentTags('card').length === 0">No recent tags yet — type one to start.</div>
+              </div>
+            </div>
+            <div class="editor-actions">
+              <button class="btn-text" @click="cancelCardNote()">CANCEL</button>
+              <button class="btn-primary" @click="saveCardEditor()">Save notes &amp; tags</button>
+            </div>
           </div>
         </div>
         <template x-for="(h, i) in currentCard().highlights" :key="h.id">

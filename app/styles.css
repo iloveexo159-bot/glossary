@@ -530,6 +530,9 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
 }
 .note-editor textarea:focus { outline: none; border-bottom-color: var(--color-text-primary); }
 .note-editor .editor-actions { display: flex; justify-content: flex-end; margin-top: var(--space-md); }
+/* In-place edit of a saved note inside an "Existing notes" item: the .hl-item
+   already draws the box, so the editor drops its own frame */
+.hl-item .note-editor { border: 0; border-radius: 0; background: none; padding: 0; margin-bottom: 0; }
 
 .book-footer { text-align: center; padding: var(--space-base); }
 
