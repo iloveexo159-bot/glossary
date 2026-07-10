@@ -97,7 +97,7 @@ test('exactly one page section renders per route, and every section is x-cloaked
 
   // steady state: display:none keeps hidden pages out of the tab order,
   // so the guard is that only the active section is ever rendered
-  for (const route of ['#/home', '#/cards', '#/settings', '#/pairing']) {
+  for (const route of ['#/home', '#/cards', '#/settings', '#/login']) {
     await hashTo(page, route);
     const visible = await page.evaluate(() =>
       [...document.querySelectorAll('main > section')]

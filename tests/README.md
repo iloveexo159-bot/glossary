@@ -28,12 +28,12 @@ The unit layer loads `app/app.js` **unmodified** into a Node `vm` sandbox that s
 
 ## Simulated features & upgrade triggers
 
-Firebase sync, device pairing, and the *live* drift fetch are **not built yet** (PRD §1, Phases 9–11). The suite tests the **simulation as it exists today**, quarantined in clearly-labelled `describe('SIMULATED — ...')` blocks. When a phase lands, rewrite the matching block against the real behaviour:
+The *live* drift fetch is the one remaining simulation (PRD Phase 11). The suite tests the **simulation as it exists today**, quarantined in clearly-labelled `describe('SIMULATED — ...')` blocks. When a phase lands, rewrite the matching block against the real behaviour:
 
 | When you build… | Rewrite these tests | New expectation |
 |---|---|---|
-| **Phase 9 — Firebase / Firestore** | new `sync.spec.js`; the "never synced" note in `simulated-sync.spec.js` | Real cross-device sync; security-rules enforcement |
-| **Phase 10 — Device pairing** | `SIMULATED — Phase 10` block in `simulated-sync.spec.js` | Real pairing code exchange + rules-enforced revoke (not just a localStorage row) |
+| ~~**Phase 9 — Firebase / Firestore**~~ **DONE** (multi-user accounts, PRD §8 Phases A–B) | Covered by `tests/unit/cloud-sync.test.js` (diff-sync engine) + `tests/rules/isolation.test.js` (security rules, needs the emulator + **JDK 11**: `npm run test:rules`). True two-browser cross-device E2E stays a manual pre-release step (PRD §8.8 Phase E). | — |
+| ~~**Phase 10 — Device pairing**~~ **REMOVED** (accounts replaced pairing, PRD §8.2) | Pairing block deleted; `simulated-sync.spec.js` now asserts the Settings Sync section routes to sign-in and `#/pairing` falls back to home. | — |
 | **Phase 11 — Live drift check** | `SIMULATED — Phase 11` block in `simulated-sync.spec.js`; `tests/unit/drift.test.js` header | Real on-view fetch populates `live`; the comparison logic stays as-is |
 
 ## Known PRD-vs-code gaps captured as tests

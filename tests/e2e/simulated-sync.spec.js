@@ -1,13 +1,19 @@
 /* ============================================================
    SIMULATED FEATURES — quarantined on purpose.
 
-   Firebase sync, device pairing, and the live Wikipedia-drift FETCH are not
-   built yet (PRD §1 build status; Phases 9–11). The code only *simulates* them
-   in localStorage. These tests assert the SIMULATION as it exists today.
+   Upgrade log: Phases 9–10 (Firebase sync + device pairing) fired their
+   trigger in the multi-user accounts build (PRD §8, Phases A–D): sync is now
+   real (per-account Firestore, covered by tests/unit/cloud-sync.test.js and
+   tests/rules/isolation.test.js) and pairing was REMOVED — accounts replaced
+   it, so its block is gone rather than rewritten. Real cross-device E2E needs
+   two authenticated browsers and stays a manual pre-release step (PRD §8.8
+   Phase E checklist).
 
-   >>> UPGRADE TRIGGER: when you build Phase 9 (Firebase), Phase 10 (pairing),
-       or Phase 11 (live drift), rewrite the matching block below against the
-       real behaviour. See tests/README.md for the trigger table. <<<
+   Still simulated below: the live Wikipedia-drift FETCH (Phase 11) — the
+   drift comparison logic is real, the "live" article is a mock.
+
+   >>> UPGRADE TRIGGER: when you build Phase 11 (live drift), rewrite that
+       block against the real behaviour. See tests/README.md. <<<
    ============================================================ */
 const { test, expect } = require('@playwright/test');
 const { openApp, hashTo, seedCard } = require('./helpers');
@@ -28,29 +34,17 @@ test.describe('SIMULATED — display prefs (real, per-device, never synced)', ()
   });
 });
 
-test.describe('SIMULATED — Phase 10 device pairing (localStorage only)', () => {
-  test('pairing adds a device to the list; revoke removes it', async ({ page }) => {
+test.describe('Sync section (accounts replaced pairing — PRD §8.2)', () => {
+  test('signed out, Settings offers sign-in instead of pairing', async ({ page }) => {
     await openApp(page);
     await gotoSettings(page);
-    await page.getByRole('button', { name: 'Pair a new device' }).click();
-    await expect(page.locator('.page-title:visible')).toHaveText('Device pairing');
-
-    await page.locator('input[aria-label="Pairing code"]').fill('123456');
-    await page.getByRole('button', { name: 'Link device' }).click();
-
-    const paired = page.locator('.device-row', { hasText: 'code 123456' });
-    await expect(paired).toBeVisible();
-    await paired.getByRole('button', { name: 'REVOKE' }).click();
-    await expect(page.locator('.device-row', { hasText: 'code 123456' })).toHaveCount(0);
-  });
-
-  test('a non-6-digit code is rejected', async ({ page }) => {
-    await openApp(page);
-    await gotoSettings(page);
-    await page.getByRole('button', { name: 'Pair a new device' }).click();
-    await page.locator('input[aria-label="Pairing code"]').fill('12');
-    await page.getByRole('button', { name: 'Link device' }).click();
-    await expect(page.locator('.toast')).toContainText('6-digit code');
+    await expect(page.getByText('Local only — flashcards live in this browser')).toBeVisible();
+    // scoped: the top-bar account icon is also named "Sign in"
+    await page.locator('.settings-group').getByRole('button', { name: 'Sign in' }).click();
+    await expect(page.locator('.page-title:visible')).toHaveText('Account');
+    // the retired pairing route now falls back to home instead of a dead page
+    await hashTo(page, '#/pairing');
+    await expect(page.locator('.page-title:visible')).toHaveCount(0); // home has no .page-title
   });
 });
 

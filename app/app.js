@@ -10,7 +10,6 @@ const LS = {
   recent: 'glossary.recent',
   prefs: 'glossary.prefs',
   cache: 'glossary.cache',
-  devices: 'glossary.devices',
   importOffered: 'glossary.importOffered', // + '.' + uid — one ask per account per device
 };
 
@@ -66,7 +65,6 @@ function glossaryApp() {
     cardEditor: { id: null, note: '', tags: [], tagInput: '', editing: false },
     exportSheet: false,
     prefs: { theme: 'light', brightness: 20, warmth: 0, fontScale: 1 },
-    devices: [], pairCode: '', enterCode: '',
     // auth (PRD §8.2): pending → signedOut ⇄ signedIn. `user` is a minimal
     // snapshot ({uid,name,email,photo}) — never the SDK User object, which
     // Alpine's reactive proxy would wrap and break. authUnavailable = Firebase
@@ -96,9 +94,7 @@ function glossaryApp() {
       this.cards = lsGet(LS.cards, []);
       this.recent = lsGet(LS.recent, []);
       this.prefs = Object.assign(this.prefs, lsGet(LS.prefs, {}));
-      this.devices = lsGet(LS.devices, [{ id: 'this', name: 'This device', current: true }]);
       this.applyPrefs();
-      this.regenCode();
       this.initAuth();
       window.addEventListener('hashchange', () => this.route());
       // closing the tab inside the 300ms sync debounce would strand the last
@@ -168,7 +164,7 @@ function glossaryApp() {
         // reload with no session running falls back to the collection page
         if (this.session.ids.length) this.page = 'review';
         else this.nav('cards');
-      } else if (['home', 'cards', 'settings', 'pairing', 'login', 'privacy', 'terms'].includes(p)) {
+      } else if (['home', 'cards', 'settings', 'login', 'privacy', 'terms'].includes(p)) {
         this.page = p;
         if (p === 'home') this.$nextTick(() => this.focusSearch());
       } else {
@@ -1360,23 +1356,6 @@ function glossaryApp() {
       };
       reader.readAsText(file);
       e.target.value = '';
-    },
-
-    /* ---------- pairing (simulated) ---------- */
-    regenCode() { this.pairCode = String(Math.floor(100000 + Math.random() * 900000)); },
-    pairDevice() {
-      const code = this.enterCode.trim();
-      if (!/^\d{6}$/.test(code)) { this.showToast('Enter the 6-digit code from your other device'); return; }
-      this.devices.push({ id: uid(), name: 'Paired device · code ' + code, current: false });
-      lsSet(LS.devices, this.devices);
-      this.enterCode = '';
-      this.showToast('✓ Device linked (simulated)');
-      this.nav('settings');
-    },
-    revokeDevice(id) {
-      this.devices = this.devices.filter(d => d.id !== id);
-      lsSet(LS.devices, this.devices);
-      this.showToast('Device access revoked');
     },
 
     /* ---------- auth (Google sign-in — PRD §8, Phase C) ----------

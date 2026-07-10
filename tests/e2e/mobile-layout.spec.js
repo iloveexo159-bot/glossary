@@ -47,7 +47,7 @@ test('body carries no filter/transform (would break every fixed element)', async
 
 test('no horizontal overflow on core pages', async ({ page }) => {
   await openApp(page, { seed: [seedCard()] });
-  for (const route of ['#/home', '#/cards', '#/settings', '#/pairing']) {
+  for (const route of ['#/home', '#/cards', '#/settings', '#/login']) {
     await hashTo(page, route);
     const overflow = await page.evaluate(() =>
       document.documentElement.scrollWidth - document.documentElement.clientWidth);

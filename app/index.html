@@ -682,19 +682,27 @@
     </div>
 
     <div class="settings-group">
-      <h2 class="heading" style="margin-top:0;">Sync &amp; devices</h2>
-      <p class="muted" style="font-family:var(--font-sans);font-size:var(--type-label-size);">
-        Sync status: local only — Firebase pairing is simulated in this version. Flashcards live in this browser's storage.
-      </p>
-      <template x-for="d in devices" :key="d.id">
-        <div class="device-row">
-          <span style="font-weight:600;" x-text="d.name + (d.current ? ' (this device)' : '')"></span>
-          <button class="btn-text" x-show="!d.current" @click="revokeDevice(d.id)">REVOKE</button>
+      <!-- Accounts replaced device pairing (PRD §8.2): sync is your Google
+           account on every device — nothing to pair, nothing to revoke here. -->
+      <h2 class="heading" style="margin-top:0;">Sync</h2>
+      <template x-if="authState==='signedIn'">
+        <div>
+          <p class="muted" style="font-family:var(--font-sans);font-size:var(--type-label-size);">
+            Syncing to your Google account — signed in as <b x-text="user?.email"></b>.
+            Sign in with the same account on any device to see the same collection.
+          </p>
+          <button class="btn-outline" @click="nav('login')">Manage account</button>
         </div>
       </template>
-      <div style="margin-top:var(--space-base);">
-        <button class="btn-outline" @click="nav('pairing')">Pair a new device</button>
-      </div>
+      <template x-if="authState!=='signedIn'">
+        <div>
+          <p class="muted" style="font-family:var(--font-sans);font-size:var(--type-label-size);">
+            Local only — flashcards live in this browser's storage. Sign in to back them up
+            and use them on all your devices.
+          </p>
+          <button class="btn-outline" @click="nav('login')">Sign in</button>
+        </div>
+      </template>
     </div>
   </section>
 
@@ -825,25 +833,7 @@
     </div>
   </section>
 
-  <!-- ============ PAIRING ============ -->
-  <section x-show="page==='pairing'" x-cloak>
-    <h1 class="page-title">Device pairing</h1>
-    <div class="settings-group" style="max-width:460px;">
-      <h2 class="heading" style="margin-top:0;">This device's code</h2>
-      <p class="muted" style="font-family:var(--font-sans);font-size:var(--type-label-size);">Enter this code on an already-paired device to link this one. Codes expire after one use. (Simulated in this version.)</p>
-      <div class="pair-code" x-text="pairCode"></div>
-      <button class="btn-text" @click="regenCode()">GENERATE NEW CODE</button>
-    </div>
-    <div class="settings-group" style="max-width:460px;">
-      <h2 class="heading" style="margin-top:0;">Link another device</h2>
-      <p class="muted" style="font-family:var(--font-sans);font-size:var(--type-label-size);">Type the 6-digit code shown on your other device.</p>
-      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
-        <input class="text-input" x-model="enterCode" maxlength="6" inputmode="numeric"
-               autocomplete="off" pattern="[0-9]{6}" placeholder="000000" aria-label="Pairing code">
-        <button class="btn-primary" @click="pairDevice()">Link device</button>
-      </div>
-    </div>
-  </section>
+  <!-- Device pairing removed: accounts replaced pairing (PRD §8.2, Phase D). -->
 </main>
 
 <!-- ============ BOTTOM NAV (mobile) ============ -->
