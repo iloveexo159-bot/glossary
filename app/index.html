@@ -715,6 +715,7 @@
         </button>
         <p class="muted login-note" x-show="authUnavailable" x-cloak>Sign-in is unavailable right now — check your connection and reload.</p>
         <p class="muted login-note">Until you sign in, your cards live only in this browser.</p>
+        <p class="muted login-note">By continuing you agree to the <a class="legal-link" href="#/terms">Terms of Service</a> and <a class="legal-link" href="#/privacy">Privacy Policy</a>.</p>
       </div>
 
       <div class="settings-group" x-show="authState==='signedIn'" x-cloak>
@@ -738,7 +739,89 @@
         <div style="margin-top:var(--space-lg);padding-top:var(--space-base);border-top:1px solid var(--color-border);">
           <button class="btn-text" @click="deleteDialog.show = true">DELETE ACCOUNT &amp; DATA</button>
         </div>
+        <p class="muted login-note"><a class="legal-link" href="#/terms">Terms of Service</a> · <a class="legal-link" href="#/privacy">Privacy Policy</a></p>
       </div>
+    </div>
+  </section>
+
+  <!-- ============ PRIVACY POLICY (PRD §8.7) ============ -->
+  <section x-show="page==='privacy'" x-cloak>
+    <div class="reading-col legal-page">
+      <h1 class="page-title">Privacy Policy</h1>
+      <p class="caption">Last updated 10 July 2026</p>
+
+      <h2 class="heading">Who runs Glossary</h2>
+      <p>Glossary is a personal reading-companion app operated by an individual, not a company.
+         For anything in this policy, contact <a class="legal-link" href="mailto:iloveexo159@gmail.com">iloveexo159@gmail.com</a>.</p>
+
+      <h2 class="heading">What is collected, and when</h2>
+      <p><b>Only if you sign in.</b> Signing in with Google shares your name, email address and
+         profile photo with the app, and creates an account identifier. Your account then stores
+         what you make: flashcards (with your notes, tags and highlights), a summary of each
+         finished review session, and a log of your exports.</p>
+      <p><b>Without signing in, nothing leaves your device.</b> Cards, preferences, recent
+         searches and cached articles stay in this browser's local storage. Preferences and
+         recent searches stay local even when signed in.</p>
+
+      <h2 class="heading">Where it lives</h2>
+      <p>Account data is stored in Google Firebase (Authentication and Cloud Firestore),
+         processed by Google LLC, and may be held on servers outside your country.
+         Each account's data is isolated by security rules — one account can never
+         read another's.</p>
+
+      <h2 class="heading">What it's used for</h2>
+      <p>One thing: syncing your own content across your own devices. Glossary has no ads,
+         no analytics or tracking, and never sells or shares your data with anyone.</p>
+
+      <h2 class="heading">Retention and deletion</h2>
+      <p>Your data is kept until you remove it. Deleting a card removes it everywhere.
+         <b>Account → Delete account &amp; data</b> permanently erases your entire account —
+         cards, review history, export log and the sign-in itself — immediately and
+         irreversibly. You can also email the address above to request removal.</p>
+
+      <h2 class="heading">Your rights</h2>
+      <p>Consistent with Singapore's PDPA and the GDPR: you can see everything the app holds
+         (it's all in the app), correct it (edit any card), take it with you
+         (<b>Settings → Export JSON</b>), and erase it (above) — no request forms, no waiting.</p>
+
+      <h2 class="heading">Changes</h2>
+      <p>If this policy changes materially, the date above changes and the login page will say so.</p>
+    </div>
+  </section>
+
+  <!-- ============ TERMS OF SERVICE ============ -->
+  <section x-show="page==='terms'" x-cloak>
+    <div class="reading-col legal-page">
+      <h1 class="page-title">Terms of Service</h1>
+      <p class="caption">Last updated 10 July 2026</p>
+
+      <h2 class="heading">The service</h2>
+      <p>Glossary is a free, personal reading tool provided as-is, with no uptime or
+         data-durability guarantees. Keep your own backups of anything important
+         (<b>Settings → Export JSON</b>).</p>
+
+      <h2 class="heading">Your content</h2>
+      <p>Your notes, tags and highlights are yours. Signing in grants the app only what it
+         needs to store and sync them for you — nothing more.</p>
+
+      <h2 class="heading">Third-party content</h2>
+      <p>Article summaries come from Wikipedia and are available under
+         <a class="legal-link" href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA</a>;
+         dictionary definitions come from the Free Dictionary API and synonyms from Datamuse.
+         Their content remains subject to their licenses.</p>
+
+      <h2 class="heading">Fair use of a shared, free service</h2>
+      <p>The app runs on a free storage tier shared by everyone. Automated scraping, bulk
+         writes, or attempts to access another account's data may result in the account
+         being removed.</p>
+
+      <h2 class="heading">Ending things</h2>
+      <p>You can delete your account at any time (<b>Account → Delete account &amp; data</b>).
+         The operator may remove accounts that abuse the service, and will delete the
+         account's data in doing so.</p>
+
+      <h2 class="heading">Governing law</h2>
+      <p>These terms are governed by the laws of Singapore.</p>
     </div>
   </section>
 

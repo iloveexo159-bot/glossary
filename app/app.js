@@ -168,7 +168,7 @@ function glossaryApp() {
         // reload with no session running falls back to the collection page
         if (this.session.ids.length) this.page = 'review';
         else this.nav('cards');
-      } else if (['home', 'cards', 'settings', 'pairing', 'login'].includes(p)) {
+      } else if (['home', 'cards', 'settings', 'pairing', 'login', 'privacy', 'terms'].includes(p)) {
         this.page = p;
         if (p === 'home') this.$nextTick(() => this.focusSearch());
       } else {

@@ -162,6 +162,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 .btn-google { display: inline-flex; align-items: center; gap: 0.625rem; }
 .btn-google svg { width: 1.125rem; height: 1.125rem; flex-shrink: 0; }
 .btn-google:disabled { opacity: 0.4; cursor: default; }
+/* Legal pages are reading content → serif body per the font split */
+.legal-page p { font-family: var(--font-serif); font-size: var(--type-body-size); line-height: 1.65; }
+.legal-page p.caption { font-family: var(--font-sans); }
+.legal-link { color: var(--color-text-primary); text-decoration: underline; text-underline-offset: 3px; }
 .account-row { display: flex; align-items: center; gap: var(--space-md); margin-bottom: var(--space-base); }
 .account-id { display: flex; flex-direction: column; gap: 0.125rem; font-family: var(--font-sans); }
 .account-id .muted { font-size: var(--type-label-size); }
