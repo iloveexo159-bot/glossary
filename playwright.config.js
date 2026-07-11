@@ -17,6 +17,11 @@ module.exports = defineConfig({
   use: {
     baseURL: `http://localhost:${PORT}`,
     trace: 'on-first-retry',
+    // The app registers a service worker (offline shell, PRD phase 8). A
+    // SW-controlled page can bypass page.route(), silently unmocking the
+    // Wikipedia fixtures — so SWs are off everywhere except pwa.spec.js,
+    // which opts back in to test the offline shell itself.
+    serviceWorkers: 'block',
   },
   projects: [
     { name: 'desktop-chromium', use: { ...devices['Desktop Chrome'] } },

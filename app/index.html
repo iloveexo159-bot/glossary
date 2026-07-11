@@ -6,6 +6,12 @@
 <meta name="color-scheme" content="light dark">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://www.gstatic.com https://apis.google.com 'unsafe-eval'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' https://upload.wikimedia.org https://lh3.googleusercontent.com https://*.googleusercontent.com; connect-src https://en.wikipedia.org https://upload.wikimedia.org https://api.dictionaryapi.dev https://api.datamuse.com https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://firebaseinstallations.googleapis.com https://glossary-9363f.firebaseapp.com; media-src https://api.dictionaryapi.dev; frame-src https://glossary-9363f.firebaseapp.com https://accounts.google.com https://apis.google.com; base-uri 'none'; form-action 'none'; object-src 'none'">
 <title>Glossary</title>
+<!-- PWA (PRD §6 phase 8): manifest + icons. theme-color follows the manual
+     theme toggle, so applyPrefs() rewrites it — the value here is light paper. -->
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="theme-color" content="#EEEFEA">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Mulish:wght@400;600;700&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,700;1,7..72,400&display=swap" rel="stylesheet">
@@ -142,6 +148,15 @@
         <button class="row" @click="submitSearch(r)"><span aria-hidden="true">↻</span><span x-text="r"></span></button>
       </template>
       <p class="empty-note" x-show="recent.length === 0">There are no recent searches. Type a term above to look it up.</p>
+    </div>
+    <!-- Safari-only install nudge, shown once until dismissed (PRD §7): on iOS
+         and macOS Safari alike, 7 days of non-use evicts localStorage — cards
+         saved while signed out AND the device's sync identity go with it. -->
+    <div class="install-nudge" x-show="installNudge" x-cloak>
+      <p><b>Add Glossary to your <span x-text="installPlatform()==='ios' ? 'Home Screen' : 'Dock'"></span>.</b>
+        Safari clears this app's stored data after 7 days of non-use — installing prevents that.
+        <span x-text="installHint()"></span></p>
+      <button class="btn-text" @click="dismissInstallNudge()">DISMISS</button>
     </div>
   </section>
 
@@ -841,6 +856,30 @@
             and use them on all your devices.
           </p>
           <button class="btn-outline" @click="nav('login')">Sign in</button>
+        </div>
+      </template>
+    </div>
+
+    <div class="settings-group">
+      <!-- PWA install (PRD §2.1/§7): a home-screen icon + offline shell; on
+           Safari installing also stops the 7-day storage eviction. Chromium
+           gets a real button (captured beforeinstallprompt); Safari and
+           everything else get platform instructions instead. -->
+      <h2 class="heading" style="margin-top:0;">Install</h2>
+      <template x-if="isStandalone()">
+        <p class="muted" style="font-family:var(--font-sans);font-size:var(--type-label-size);">
+          ✓ Installed — you're already using Glossary as an app.
+        </p>
+      </template>
+      <template x-if="!isStandalone()">
+        <div>
+          <p class="muted" style="font-family:var(--font-sans);font-size:var(--type-label-size);">
+            Install Glossary for a home-screen icon that opens instantly, even offline.
+            On Safari, installing also keeps the browser from clearing this app's data
+            after 7 days of non-use.
+          </p>
+          <button class="btn-outline" x-show="installPrompt" @click="promptInstall()" x-cloak>Install app</button>
+          <p class="muted" x-show="!installPrompt" style="font-family:var(--font-sans);font-size:var(--type-label-size);" x-text="installHint()"></p>
         </div>
       </template>
     </div>

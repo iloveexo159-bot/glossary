@@ -71,7 +71,12 @@ function glossaryApp() {
     exportSheet: false,
     // tagRecency: most-recently-used tags, newest first (capped). Local-only
     // like every pref — feeding the dropdown costs no Firestore reads/writes.
-    prefs: { theme: 'light', brightness: 20, warmth: 0, fontScale: 1, tagRecency: [] },
+    prefs: { theme: 'light', brightness: 20, warmth: 0, fontScale: 1, tagRecency: [], installNudgeDismissed: false },
+    // PWA install (PRD §2.1/§7): installPrompt holds Chrome/Edge's captured
+    // beforeinstallprompt event (null elsewhere — Safari has no equivalent);
+    // installNudge shows the one-time Safari home-page nudge, where 7 days of
+    // non-use evicts localStorage unless the app is installed.
+    installPrompt: null, installNudge: false,
     // auth (PRD §8.2): pending → signedOut ⇄ signedIn. `user` is a minimal
     // snapshot ({uid,name,email,photo}) — never the SDK User object, which
     // Alpine's reactive proxy would wrap and break. authUnavailable = Firebase
@@ -102,6 +107,18 @@ function glossaryApp() {
       this.recent = lsGet(LS.recent, []);
       this.prefs = Object.assign(this.prefs, lsGet(LS.prefs, {}));
       this.applyPrefs();
+      // Offline app shell (PRD §6 phase 8). Registered here, not inline in
+      // index.html — the CSP allows no 'unsafe-inline' scripts. Relative path
+      // so the scope is right both at localhost root and the /glossary/ subpath.
+      if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+      // Chromium fires this when the app qualifies for install; capturing it
+      // powers the Settings "Install app" button. Safari never fires it — the
+      // nudge below covers iOS/macOS Safari, whose 7-day storage eviction is
+      // the real stake (PRD §7): it can wipe local cards and the sync identity.
+      window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); this.installPrompt = e; });
+      const plat = this.installPlatform();
+      this.installNudge = (plat === 'ios' || plat === 'mac-safari')
+        && !this.isStandalone() && !this.prefs.installNudgeDismissed;
       this.initAuth();
       window.addEventListener('hashchange', () => this.route());
       // closing the tab inside the 300ms sync debounce would strand the last
@@ -1422,11 +1439,46 @@ function glossaryApp() {
     },
 
     /* ---------- settings ---------- */
+    /* ---------- PWA install (PRD §2.1/§7) ---------- */
+    // UA params are injectable for unit tests. iPadOS ≥13 masquerades as
+    // "Macintosh" — more than one touch point is what gives it away.
+    installPlatform(ua, touchPoints) {
+      ua = ua !== undefined ? ua : (navigator.userAgent || '');
+      touchPoints = touchPoints !== undefined ? touchPoints : (navigator.maxTouchPoints || 0);
+      if (/iPad|iPhone|iPod/.test(ua)) return 'ios';
+      if (/Macintosh/.test(ua) && touchPoints > 1) return 'ios';
+      if (/Macintosh/.test(ua) && /Safari\//.test(ua) && !/Chrome|Chromium|Edg\//.test(ua)) return 'mac-safari';
+      return 'other';
+    },
+    isStandalone() {
+      return (typeof matchMedia === 'function' && matchMedia('(display-mode: standalone)').matches)
+        || navigator.standalone === true; // iOS Safari's non-standard flag
+    },
+    // per-platform "how to install" copy: Safari needs manual steps; 'other'
+    // covers Chromium before beforeinstallprompt fires (or already installed)
+    installHint() {
+      const plat = this.installPlatform();
+      if (plat === 'ios') return 'In Safari, tap the Share button, then "Add to Home Screen".';
+      if (plat === 'mac-safari') return 'In Safari’s File menu, choose "Add to Dock".';
+      return 'Look for an install icon in your browser’s address bar.';
+    },
+    promptInstall() {
+      if (!this.installPrompt) return;
+      const p = this.installPrompt;
+      this.installPrompt = null; // a prompt event is single-use either way
+      p.prompt();
+    },
+    dismissInstallNudge() { this.installNudge = false; this.setPref('installNudgeDismissed', true); },
+
     setPref(key, value) { this.prefs[key] = value; this.applyPrefs(); this.persistPrefs(); },
     applyPrefs() {
       const root = document.documentElement;
       root.setAttribute('data-theme', this.prefs.theme);
       root.style.setProperty('--user-font-scale', this.prefs.fontScale);
+      // browser chrome (PWA title bar, mobile status bar) follows the manual
+      // theme toggle — values mirror --color-background in styles.css
+      const themeMeta = document.querySelector('meta[name="theme-color"]');
+      if (themeMeta) themeMeta.setAttribute('content', this.prefs.theme === 'dark' ? '#131312' : '#EEEFEA');
       if (this.prefs.theme === 'light') {
         // dim overlay opacity replaces the old body brightness filter (a filter
         // on <body> broke every position:fixed element — see styles.css body rule).
