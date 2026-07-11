@@ -234,7 +234,7 @@
             <template x-for="t in cardEditor.tags" :key="t">
               <span class="chip-tag">#<span x-text="t"></span><button class="x" @click="cardEditor.tags = cardEditor.tags.filter(x => x !== t)" :aria-label="'Remove tag ' + t">✕</button></span>
             </template>
-            <input id="rc-tags" x-model="cardEditor.tagInput" list="all-tags"
+            <input id="rc-tags" x-model="cardEditor.tagInput"
                    placeholder="Add a tag, space to confirm" aria-label="Add a tag"
                    @keydown="onTagKeydown($event, 'card')">
             <button class="tag-menu-btn" type="button" aria-label="Show recent tags"
@@ -276,7 +276,7 @@
                 <template x-for="t in cardEditor.tags" :key="t">
                   <span class="chip-tag">#<span x-text="t"></span><button class="x" @click="cardEditor.tags = cardEditor.tags.filter(x => x !== t)" :aria-label="'Remove tag ' + t">✕</button></span>
                 </template>
-                <input id="rce-tags" x-model="cardEditor.tagInput" list="all-tags"
+                <input id="rce-tags" x-model="cardEditor.tagInput"
                        placeholder="Add a tag, space to confirm" aria-label="Add a tag"
                        @keydown="onTagKeydown($event, 'card')">
                 <button class="tag-menu-btn" type="button" aria-label="Show recent tags"
@@ -639,7 +639,7 @@
             <template x-for="t in cardEditor.tags" :key="t">
               <span class="chip-tag">#<span x-text="t"></span><button class="x" @click="cardEditor.tags = cardEditor.tags.filter(x => x !== t)" :aria-label="'Remove tag ' + t">✕</button></span>
             </template>
-            <input id="dc-tags" x-model="cardEditor.tagInput" list="all-tags"
+            <input id="dc-tags" x-model="cardEditor.tagInput"
                    placeholder="Add a tag, space to confirm" aria-label="Add a tag"
                    @keydown="onTagKeydown($event, 'card')">
             <button class="tag-menu-btn" type="button" aria-label="Show recent tags"
@@ -680,7 +680,7 @@
               <template x-for="t in cardEditor.tags" :key="t">
                 <span class="chip-tag">#<span x-text="t"></span><button class="x" @click="cardEditor.tags = cardEditor.tags.filter(x => x !== t)" :aria-label="'Remove tag ' + t">✕</button></span>
               </template>
-              <input id="dce-tags" x-model="cardEditor.tagInput" list="all-tags"
+              <input id="dce-tags" x-model="cardEditor.tagInput"
                      placeholder="Add a tag, space to confirm" aria-label="Add a tag"
                      @keydown="onTagKeydown($event, 'card')">
               <button class="tag-menu-btn" type="button" aria-label="Show recent tags"
@@ -944,7 +944,7 @@
       <template x-for="t in noteDialog.tags" :key="t">
         <span class="chip-tag">#<span x-text="t"></span><button class="x" @click="noteDialog.tags = noteDialog.tags.filter(x => x !== t)" :aria-label="'Remove tag ' + t">✕</button></span>
       </template>
-      <input id="note-tags" x-model="noteDialog.tagInput" list="all-tags"
+      <input id="note-tags" x-model="noteDialog.tagInput"
              placeholder="Add a tag, space to confirm" aria-label="Add a tag"
              @keydown="onTagKeydown($event, 'note')">
       <button class="tag-menu-btn" type="button" aria-label="Show recent tags"
@@ -1043,8 +1043,5 @@
 <div class="toast" x-show="toast" x-cloak x-text="toast" aria-hidden="true"></div>
 <div class="sr-only" role="status" aria-live="polite" x-text="announce"></div>
 
-<datalist id="all-tags">
-  <template x-for="t in allTags()" :key="t"><option :value="t"></option></template>
-</datalist>
 </body>
 </html>
