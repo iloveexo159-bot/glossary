@@ -620,7 +620,7 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
       </div>
       <div class="actions" style="margin-top:var(--space-md);justify-content:flex-end;"><button class="btn-primary">Save notes &amp; tags</button></div>
     </div>
-    <div class="demo-label">saved-item-card · one white container for the card note and every highlight, under "Existing notes" · each with EDIT / REMOVE</div>
+    <div class="demo-label">saved-item-card · one white container for the card note and every highlight, under "Existing notes" · each with EDIT / REMOVE · EDIT flips the item ITSELF into an in-place editor (note + tag chips + CANCEL beside Save) — card note and highlights alike, never a second copy elsewhere</div>
     <div class="saved-item-card">
       <div style="font-family:var(--font-sans);font-size:var(--type-caption-size);font-weight:700;letter-spacing:var(--type-caption-ls);text-transform:uppercase;color:var(--color-text-muted);margin-bottom:var(--space-sm);">Card note</div>
       <p class="note-text">Referenced in Chapter 2 — worth revisiting.</p>
@@ -635,11 +635,11 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
 
   <h3>Reading &amp; annotation</h3>
   <div class="demo-block">
-    <div class="demo-label">highlight-mark + note-marker · yellow is the page's only hue · the whole highlight is clickable and opens the note (hover shows an ink underline)</div>
+    <div class="demo-label">highlight-mark + note-marker · yellow is the page's only hue · the whole highlight is clickable and opens that highlight's in-place editor in the list below, scrolled into view with the note focused (hover shows an ink underline)</div>
     <p class="reading-sample" style="margin:0 0 var(--space-lg);">The wall was built <mark class="hl" role="button" tabindex="0" aria-label="Open note 1">to protect against nomadic incursions from the Eurasian Steppe</mark><span class="note-marker" role="button" tabindex="0" aria-label="Open note 1">1</span>, with watchtowers placed at regular intervals along its length.</p>
     <div class="demo-label">toolbar-selection · light bordered strip over selected text, as in the reference · mouse selection surfaces it on release; a touch LONG-PRESS selection surfaces the same toolbar once the selection settles · 44px buttons on touch</div>
     <div class="sel-toolbar"><button>Highlight</button><button>Note</button></div>
-    <div class="demo-label">dialog-note · near-square, over 35% scrim, shadow-md · space commits a tag chip, ✕ removes it</div>
+    <div class="demo-label">dialog-note · near-square, over 35% scrim, shadow-md · appears ONLY when a note is first created from the toolbar — later edits happen in place in the saved item · space commits a tag chip, ✕ removes it · every tags field ends in a ▾ opening the recent-tags dropdown (top 5 by use recency, local-only; opens upward inside a dialog)</div>
     <div class="note-dialog">
       <div class="head"><b>Note</b><button class="btn-text" style="min-height:auto;padding:0.25rem 0.5rem;" aria-label="Close">✕</button></div>
       <textarea aria-label="Note text">Mentioned in Chapter 3 of "Sapiens" —</textarea>
@@ -655,13 +655,13 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
 
   <h3>Device chrome</h3>
   <div class="demo-block">
-    <div class="demo-label">nav-top · bar spans the screen, contents share the centered content column · nav + gear pinned to the column's right edge in the identical position on every page · scrollbar gutter reserved so the column never shifts</div>
-    <div class="nav-top-demo"><span class="spacer"></span><span style="color:var(--color-text-primary);font-weight:700;text-decoration:underline;text-underline-offset:5px;">Home</span><span style="color:var(--color-text-secondary);">Collection</span><button class="icon-btn" aria-label="Settings">⚙</button></div>
-    <p class="note" style="margin:0.375rem 0;">Home — nav + Settings only, in the shared right-edge position (search is the centered hero, below)</p>
-    <div class="nav-top-demo"><span>←</span><span style="font-family:var(--font-serif);font-weight:700;">Glossary</span><div class="search-wrap" style="flex:1;max-width:340px;"><svg class="icon lead" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg><input class="input-search" style="height:2.25rem;min-height:2.25rem;" value="great wall" aria-label="Search Wikipedia"><button class="icon trail" aria-label="Clear search">✕</button></div><span class="spacer"></span><span style="color:var(--color-text-secondary);">Home</span><span style="color:var(--color-text-primary);font-weight:700;text-decoration:underline;text-underline-offset:5px;">Collection</span><button class="icon-btn" aria-label="Settings">⚙</button></div>
+    <div class="demo-label">nav-top · bar spans the screen, contents share the centered content column · nav + gear + account button pinned to the column's right edge in the identical position on every page (account is rightmost: person outline signed out, GRAYSCALE Google avatar signed in) · scrollbar gutter reserved so the column never shifts</div>
+    <div class="nav-top-demo"><span class="spacer"></span><span style="color:var(--color-text-primary);font-weight:700;text-decoration:underline;text-underline-offset:5px;">Home</span><span style="color:var(--color-text-secondary);">Collection</span><button class="icon-btn" aria-label="Settings">⚙</button><button class="icon-btn" aria-label="Account">👤</button></div>
+    <p class="note" style="margin:0.375rem 0;">Home — nav + Settings + account only, in the shared right-edge position (search is the centered hero, below)</p>
+    <div class="nav-top-demo"><span>←</span><span style="font-family:var(--font-serif);font-weight:700;">Glossary</span><div class="search-wrap" style="flex:1;max-width:340px;"><svg class="icon lead" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg><input class="input-search" style="height:2.25rem;min-height:2.25rem;" value="great wall" aria-label="Search Wikipedia"><button class="icon trail" aria-label="Clear search">✕</button></div><span class="spacer"></span><span style="color:var(--color-text-secondary);">Home</span><span style="color:var(--color-text-primary);font-weight:700;text-decoration:underline;text-underline-offset:5px;">Collection</span><button class="icon-btn" aria-label="Settings">⚙</button><button class="icon-btn" aria-label="Account">👤</button></div>
     <p class="note" style="margin:0.375rem 0;">Results, Collection, and card detail — ← back (real history) + wordmark + Wikipedia search, same nav + gear on the right. The field mirrors the current results context only; leaving Results empties it. The saved-flashcards search is not in the bar — it sits on the page under the My Collection title.</p>
-    <div class="nav-top-demo"><span>←</span><span style="font-family:var(--font-serif);font-weight:700;">Glossary</span><span class="spacer"></span><span style="color:var(--color-text-primary);font-weight:700;text-decoration:underline;text-underline-offset:5px;">Home</span><span style="color:var(--color-text-secondary);">Collection</span><button class="icon-btn" aria-label="Settings">⚙</button></div>
-    <p class="note" style="margin:0.375rem 0 0;">Settings / pairing — back + wordmark, no search. On narrow viewports the wordmark drops out (bottom bar carries Home) so the search keeps a usable width.</p>
+    <div class="nav-top-demo"><span>←</span><span style="font-family:var(--font-serif);font-weight:700;">Glossary</span><span class="spacer"></span><span style="color:var(--color-text-primary);font-weight:700;text-decoration:underline;text-underline-offset:5px;">Home</span><span style="color:var(--color-text-secondary);">Collection</span><button class="icon-btn" aria-label="Settings">⚙</button><button class="icon-btn" aria-label="Account">👤</button></div>
+    <p class="note" style="margin:0.375rem 0 0;">Settings / login — back + wordmark, no search. On narrow viewports the wordmark and nav links drop out (bottom bar carries Home) so the search keeps a usable width, and Settings + account stay pinned to the right edge.</p>
     <div class="demo-label">nav-bottom · narrow/touch viewports, underlined active item · fixed to the viewport, extended by env(safe-area-inset-bottom) so it runs under a notched phone's home indicator (the toast offsets by the same inset) · never put a filter/transform on body — it re-anchors every fixed element to the document</div>
     <div class="nav-bottom"><a class="is-active" href="#">Home</a><a href="#">Collection</a></div>
     <div class="demo-label">book-footer · the signature: progress in the device's voice</div>
@@ -686,6 +686,15 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
     <div class="demo-row"><button class="dict-option"><span class="src-tag">Dictionary</span><span>See the definition of "ignominy"</span></button></div>
     <div class="demo-label">toast · save confirmation, bottom-center, auto-dismisses · also the failure signal — a write that can't persist is rolled back and the toast warns instead of falsely confirming</div>
     <div class="demo-row"><span class="toast">✓ Saved to flashcards</span></div>
+  </div>
+
+  <h3>Account &amp; export</h3>
+  <div class="demo-block">
+    <div class="demo-label">login/account page (#/login) · three states in the device voice · signed out: quiet pitch + one outline button + Privacy/Terms text links · signing in: progress · signed in: grayscale avatar, name, email, Sign out, and Delete account as the quiet-destructive pattern (types-DELETE confirm, never red)</div>
+    <div class="demo-row"><button class="btn-outline">Continue with Google</button><button class="btn-text">SIGN OUT</button><button class="btn-text">DELETE ACCOUNT</button></div>
+    <div class="demo-label">first-login import · a device already holding local cards gets a ONE-TIME offer to import them — never a silent merge (a shared machine must not leak one person's cards into another's account) · the same import lives in Settings → Sync afterwards</div>
+    <div class="demo-label">export sheet · signed in adds EMAIL TO ME beside Download · bundles the selection as "(DD-MM-YYYY) Glossary Export.zip" · phone: straight to the share sheet · computer: zip downloads while a pre-addressed Gmail compose tab opens — a caption on the sheet says exactly that, so the manual attach step is never a surprise</div>
+    <div class="demo-row"><button class="btn-text">CANCEL</button><button class="btn-text">EMAIL TO ME</button><button class="btn-text" style="color:var(--color-text-primary);">Download</button></div>
   </div>
 
   <!-- ================= DO / DON'T ================= -->
@@ -715,7 +724,7 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
     </div>
   </div>
 
-  <p class="note" style="margin-top:var(--space-2xl);">Glossary design system · mirror of docs/design.md · derived from PRD_WikiSearch_MVP.md + raw-design-system.fig only · updated 2026-07-09</p>
+  <p class="note" style="margin-top:var(--space-2xl);">Glossary design system · mirror of docs/design.md · derived from PRD_WikiSearch_MVP.md + raw-design-system.fig only · updated 2026-07-11</p>
 </main>
 
 <script>
