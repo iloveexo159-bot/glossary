@@ -21,15 +21,42 @@ const desktopOnly = (testInfo) =>
 
 const noteDialog = (page) => page.locator('.dialog[aria-label="Note"]');
 
-test('the note dialog traps Tab in both directions and returns focus to its opener', async ({ page }, testInfo) => {
+/* The note dialog only opens at creation now (selection toolbar → Note), so
+   both dialog tests reach it by selecting a fresh word programmatically and
+   dispatching the mouseup the toolbar listens for — Playwright has no direct
+   text-selection API. */
+const selectWord = (page, word) => page.evaluate((w) => {
+  const ext = [...document.querySelectorAll('.extract')].find((e) => e.getClientRects().length);
+  const walker = document.createTreeWalker(ext, NodeFilter.SHOW_TEXT);
+  let node;
+  while ((node = walker.nextNode())) {
+    const i = node.textContent.indexOf(w);
+    if (i < 0) continue;
+    const r = document.createRange();
+    r.setStart(node, i);
+    r.setEnd(node, i + w.length);
+    const sel = getSelection();
+    sel.removeAllRanges();
+    sel.addRange(r);
+    ext.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    return true;
+  }
+  return false;
+}, word);
+
+const openCreationDialog = async (page) => {
+  await expect(page.locator('mark.hl')).toBeVisible(); // extract fully rendered
+  expect(await selectWord(page, 'matter')).toBe(true); // not covered by the seeded highlight
+  await page.getByRole('button', { name: 'Note', exact: true }).click();
+  await expect(noteDialog(page)).toBeVisible();
+};
+
+test('the note-creation dialog traps Tab in both directions and Escape closes it', async ({ page }, testInfo) => {
   desktopOnly(testInfo);
   await openApp(page, { seed: [annotated()] });
   await hashTo(page, '#/card/c1');
-  const mark = page.locator('mark.hl');
-  await mark.focus();
-  await page.keyboard.press('Enter'); // open the highlight's note dialog
+  await openCreationDialog(page);
   const dlg = noteDialog(page);
-  await expect(dlg).toBeVisible();
   await expect(dlg.locator('textarea')).toBeFocused();
 
   // more presses than the dialog has controls, so the wrap itself is exercised
@@ -46,14 +73,12 @@ test('the note dialog traps Tab in both directions and returns focus to its open
 
   await page.keyboard.press('Escape');
   await expect(dlg).toBeHidden();
-  await expect(mark).toBeFocused();
 });
 
 test('the page behind an open dialog is inert, including the bottom nav', async ({ page }) => {
   await openApp(page, { seed: [annotated()] });
   await hashTo(page, '#/card/c1');
-  await page.locator('mark.hl').click(); // clicking a highlight opens its note dialog
-  await expect(noteDialog(page)).toBeVisible();
+  await openCreationDialog(page);
 
   await expect(page.locator('main')).toHaveJSProperty('inert', true);
   await expect(page.locator('.top-bar')).toHaveJSProperty('inert', true);
@@ -65,7 +90,17 @@ test('the page behind an open dialog is inert, including the bottom nav', async 
   await expect(page.locator('.nav-bottom')).toHaveJSProperty('inert', false);
 });
 
-test('Enter on a focused highlight mark opens its note dialog', async ({ page }, testInfo) => {
+test('clicking a highlight mark opens its in-place editor, not a dialog', async ({ page }) => {
+  await openApp(page, { seed: [annotated()] });
+  await hashTo(page, '#/card/c1');
+  await page.locator('mark.hl').click();
+  const item = page.locator('[data-hl-item="h1"]:visible');
+  await expect(item.locator('.note-editor')).toBeVisible();
+  await expect(item.locator('blockquote')).toContainText(HL_TEXT);
+  await expect(noteDialog(page)).toBeHidden();
+});
+
+test('Enter on a focused highlight mark opens its in-place editor and focuses the note', async ({ page }, testInfo) => {
   desktopOnly(testInfo);
   await openApp(page, { seed: [annotated()] });
   await hashTo(page, '#/card/c1');
@@ -73,9 +108,10 @@ test('Enter on a focused highlight mark opens its note dialog', async ({ page },
   await expect(mark).toHaveText(HL_TEXT);
   await mark.focus();
   await page.keyboard.press('Enter');
-  const dlg = page.locator('.dialog[aria-label="Note"]');
-  await expect(dlg).toBeVisible();
-  await expect(dlg.locator('blockquote')).toContainText(HL_TEXT);
+  const editor = page.locator('[data-hl-item="h1"]:visible .note-editor');
+  await expect(editor).toBeVisible();
+  await expect(editor.locator('textarea')).toBeFocused();
+  await expect(editor.locator('textarea')).toHaveValue('a note');
 });
 
 test('live region announces the loaded article and the save confirmation', async ({ page }) => {

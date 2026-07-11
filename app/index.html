@@ -234,8 +234,7 @@
             <template x-for="t in cardEditor.tags" :key="t">
               <span class="chip-tag">#<span x-text="t"></span><button class="x" @click="cardEditor.tags = cardEditor.tags.filter(x => x !== t)" :aria-label="'Remove tag ' + t">✕</button></span>
             </template>
-            <input id="rc-tags" x-model="cardEditor.tagInput"
-                   placeholder="Add a tag, space to confirm" aria-label="Add a tag"
+            <input id="rc-tags" x-model="cardEditor.tagInput" placeholder="Add a tag, space to confirm" aria-label="Add a tag"
                    @keydown="onTagKeydown($event, 'card')">
             <button class="tag-menu-btn" type="button" aria-label="Show recent tags"
                     :aria-expanded="(tagMenu.open && tagMenu.id === 'rc') ? 'true' : 'false'"
@@ -276,8 +275,7 @@
                 <template x-for="t in cardEditor.tags" :key="t">
                   <span class="chip-tag">#<span x-text="t"></span><button class="x" @click="cardEditor.tags = cardEditor.tags.filter(x => x !== t)" :aria-label="'Remove tag ' + t">✕</button></span>
                 </template>
-                <input id="rce-tags" x-model="cardEditor.tagInput"
-                       placeholder="Add a tag, space to confirm" aria-label="Add a tag"
+                <input id="rce-tags" x-model="cardEditor.tagInput" placeholder="Add a tag, space to confirm" aria-label="Add a tag"
                        @keydown="onTagKeydown($event, 'card')">
                 <button class="tag-menu-btn" type="button" aria-label="Show recent tags"
                         :aria-expanded="(tagMenu.open && tagMenu.id === 'rce') ? 'true' : 'false'"
@@ -297,14 +295,45 @@
               </div>
             </div>
           </div>
+          <!-- EDIT flips the highlight item into an in-place editor too; the
+               popup note dialog only appears when a note is first created. -->
           <template x-for="h in (resultCard()?.highlights || [])" :key="h.id">
-            <div class="hl-item">
+            <div class="hl-item" :data-hl-item="h.id">
               <blockquote x-text="'“' + h.text + '”'"></blockquote>
-              <p class="note-text" x-show="h.note" x-text="h.note"></p>
-              <div class="chip-row">
-                <template x-for="t in h.tags" :key="t"><span class="chip-tag" x-text="'#' + t"></span></template>
-                <button class="btn-text" @click="openNoteDialog(h.id)">EDIT</button>
-                <button class="btn-text" @click="removeHighlight(h.id)">REMOVE</button>
+              <div x-show="hlEditor.id !== h.id">
+                <p class="note-text" x-show="h.note" x-text="h.note"></p>
+                <div class="chip-row">
+                  <template x-for="t in h.tags" :key="t"><span class="chip-tag" x-text="'#' + t"></span></template>
+                  <button class="btn-text" @click="editHighlight(h.id)">EDIT</button>
+                  <button class="btn-text" @click="removeHighlight(h.id)">REMOVE</button>
+                </div>
+              </div>
+              <div class="note-editor" x-show="hlEditor.id === h.id" x-cloak>
+                <textarea x-model="hlEditor.note" placeholder="Write a note…" aria-label="Highlight note"></textarea>
+                <label class="field-label caption" :for="'rh-tags-' + h.id">Tags</label>
+                <div class="input-tags">
+                  <template x-for="t in hlEditor.tags" :key="t">
+                    <span class="chip-tag">#<span x-text="t"></span><button class="x" @click="hlEditor.tags = hlEditor.tags.filter(x => x !== t)" :aria-label="'Remove tag ' + t">✕</button></span>
+                  </template>
+                  <input :id="'rh-tags-' + h.id" x-model="hlEditor.tagInput"
+                         placeholder="Add a tag, space to confirm" aria-label="Add a tag"
+                         @keydown="onTagKeydown($event, 'hl')">
+                  <button class="tag-menu-btn" type="button" aria-label="Show recent tags"
+                          :aria-expanded="(tagMenu.open && tagMenu.id === 'rh-' + h.id) ? 'true' : 'false'"
+                          @click.stop="toggleTagMenu('hl', 'rh-' + h.id)">▾</button>
+                  <div class="dropdown tag-dropdown" x-show="tagMenu.open && tagMenu.id === 'rh-' + h.id" x-cloak
+                       @click.outside="tagMenu.open = false">
+                    <div class="head"><span>Recent tags</span></div>
+                    <template x-for="t in recentTags('hl')" :key="t">
+                      <button class="row" type="button" @click="pickRecentTag('hl', t)">#<span x-text="t"></span></button>
+                    </template>
+                    <div class="empty" x-show="recentTags('hl').length === 0">No recent tags yet — type one to start.</div>
+                  </div>
+                </div>
+                <div class="editor-actions">
+                  <button class="btn-text" @click="cancelHlEdit()">CANCEL</button>
+                  <button class="btn-primary" @click="saveHlEditor()">Save note</button>
+                </div>
               </div>
             </div>
           </template>
@@ -572,7 +601,7 @@
     <!-- Results: score + pass/fail once every card has been seen. Pass rule is
          correct > wrong + skipped (a strict majority of the deck). -->
     <div class="state-box session-result" x-show="session.done" x-cloak>
-      <p class="result-headline" x-text="sessionStats().passed ? '🎉 Congratulations, you passed!' : '✗ Not passed this time.'"></p>
+      <p class="result-headline" x-text="sessionStats().passed ? '🎉 Congratulations, you passed!' : '😭 Oh no, you failed...'"></p>
       <p x-text="'You got ' + sessionStats().correct + '/' + sessionStats().total + ' correct, and skipped ' + sessionStats().skipped + ' card' + (sessionStats().skipped === 1 ? '' : 's') + '.'"></p>
       <div style="display:flex;gap:var(--space-sm);justify-content:center;flex-wrap:wrap;margin-top:var(--space-base);">
         <button class="btn-primary" @click="restartSession()">Restart</button>
@@ -639,8 +668,7 @@
             <template x-for="t in cardEditor.tags" :key="t">
               <span class="chip-tag">#<span x-text="t"></span><button class="x" @click="cardEditor.tags = cardEditor.tags.filter(x => x !== t)" :aria-label="'Remove tag ' + t">✕</button></span>
             </template>
-            <input id="dc-tags" x-model="cardEditor.tagInput"
-                   placeholder="Add a tag, space to confirm" aria-label="Add a tag"
+            <input id="dc-tags" x-model="cardEditor.tagInput" placeholder="Add a tag, space to confirm" aria-label="Add a tag"
                    @keydown="onTagKeydown($event, 'card')">
             <button class="tag-menu-btn" type="button" aria-label="Show recent tags"
                     :aria-expanded="(tagMenu.open && tagMenu.id === 'dc') ? 'true' : 'false'"
@@ -680,8 +708,7 @@
               <template x-for="t in cardEditor.tags" :key="t">
                 <span class="chip-tag">#<span x-text="t"></span><button class="x" @click="cardEditor.tags = cardEditor.tags.filter(x => x !== t)" :aria-label="'Remove tag ' + t">✕</button></span>
               </template>
-              <input id="dce-tags" x-model="cardEditor.tagInput"
-                     placeholder="Add a tag, space to confirm" aria-label="Add a tag"
+              <input id="dce-tags" x-model="cardEditor.tagInput" placeholder="Add a tag, space to confirm" aria-label="Add a tag"
                      @keydown="onTagKeydown($event, 'card')">
               <button class="tag-menu-btn" type="button" aria-label="Show recent tags"
                       :aria-expanded="(tagMenu.open && tagMenu.id === 'dce') ? 'true' : 'false'"
@@ -701,14 +728,45 @@
             </div>
           </div>
         </div>
+        <!-- EDIT flips the highlight item into an in-place editor too; the
+             popup note dialog only appears when a note is first created. -->
         <template x-for="(h, i) in currentCard().highlights" :key="h.id">
-          <div class="hl-item">
+          <div class="hl-item" :data-hl-item="h.id">
             <blockquote x-text="'“' + h.text + '”'"></blockquote>
-            <p class="note-text" x-show="h.note" x-text="h.note"></p>
-            <div class="chip-row">
-              <template x-for="t in h.tags" :key="t"><span class="chip-tag" x-text="'#' + t"></span></template>
-              <button class="btn-text" @click="openNoteDialog(h.id)">EDIT</button>
-              <button class="btn-text" @click="removeHighlight(h.id)">REMOVE</button>
+            <div x-show="hlEditor.id !== h.id">
+              <p class="note-text" x-show="h.note" x-text="h.note"></p>
+              <div class="chip-row">
+                <template x-for="t in h.tags" :key="t"><span class="chip-tag" x-text="'#' + t"></span></template>
+                <button class="btn-text" @click="editHighlight(h.id)">EDIT</button>
+                <button class="btn-text" @click="removeHighlight(h.id)">REMOVE</button>
+              </div>
+            </div>
+            <div class="note-editor" x-show="hlEditor.id === h.id" x-cloak>
+              <textarea x-model="hlEditor.note" placeholder="Write a note…" aria-label="Highlight note"></textarea>
+              <label class="field-label caption" :for="'dh-tags-' + h.id">Tags</label>
+              <div class="input-tags">
+                <template x-for="t in hlEditor.tags" :key="t">
+                  <span class="chip-tag">#<span x-text="t"></span><button class="x" @click="hlEditor.tags = hlEditor.tags.filter(x => x !== t)" :aria-label="'Remove tag ' + t">✕</button></span>
+                </template>
+                <input :id="'dh-tags-' + h.id" x-model="hlEditor.tagInput"
+                       placeholder="Add a tag, space to confirm" aria-label="Add a tag"
+                       @keydown="onTagKeydown($event, 'hl')">
+                <button class="tag-menu-btn" type="button" aria-label="Show recent tags"
+                        :aria-expanded="(tagMenu.open && tagMenu.id === 'dh-' + h.id) ? 'true' : 'false'"
+                        @click.stop="toggleTagMenu('hl', 'dh-' + h.id)">▾</button>
+                <div class="dropdown tag-dropdown" x-show="tagMenu.open && tagMenu.id === 'dh-' + h.id" x-cloak
+                     @click.outside="tagMenu.open = false">
+                  <div class="head"><span>Recent tags</span></div>
+                  <template x-for="t in recentTags('hl')" :key="t">
+                    <button class="row" type="button" @click="pickRecentTag('hl', t)">#<span x-text="t"></span></button>
+                  </template>
+                  <div class="empty" x-show="recentTags('hl').length === 0">No recent tags yet — type one to start.</div>
+                </div>
+              </div>
+              <div class="editor-actions">
+                <button class="btn-text" @click="cancelHlEdit()">CANCEL</button>
+                <button class="btn-primary" @click="saveHlEditor()">Save note</button>
+              </div>
             </div>
           </div>
         </template>
@@ -944,8 +1002,7 @@
       <template x-for="t in noteDialog.tags" :key="t">
         <span class="chip-tag">#<span x-text="t"></span><button class="x" @click="noteDialog.tags = noteDialog.tags.filter(x => x !== t)" :aria-label="'Remove tag ' + t">✕</button></span>
       </template>
-      <input id="note-tags" x-model="noteDialog.tagInput"
-             placeholder="Add a tag, space to confirm" aria-label="Add a tag"
+      <input id="note-tags" x-model="noteDialog.tagInput" placeholder="Add a tag, space to confirm" aria-label="Add a tag"
              @keydown="onTagKeydown($event, 'note')">
       <button class="tag-menu-btn" type="button" aria-label="Show recent tags"
               :aria-expanded="(tagMenu.open && tagMenu.id === 'note') ? 'true' : 'false'"

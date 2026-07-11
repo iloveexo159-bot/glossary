@@ -63,6 +63,7 @@ function glossaryApp() {
     // The editor is an ADD/EDIT input that starts empty; a saved note moves to the
     // "Existing notes" list below. `editing` re-opens the editor over a saved note.
     cardEditor: { id: null, note: '', tags: [], tagInput: '', editing: false },
+    hlEditor: { id: null, note: '', tags: [], tagInput: '' },
     // recent-tags dropdown on the tag inputs. `id` names which of the three
     // inputs owns the open menu (rc/dc/note) so only one opens at a time;
     // `target` picks the editor object the chosen tag lands in.
@@ -533,7 +534,7 @@ function glossaryApp() {
       this.cardEditor = { id: id ?? null, note: '', tags: [], tagInput: '', editing: false };
       this.tagMenu.open = false;
     },
-    syncCardEditor(card) { this.resetEditor(card ? card.id : null); },
+    syncCardEditor(card) { this.resetEditor(card ? card.id : null); this.cancelHlEdit(); },
     editCardNote() {
       const c = this.editorCard();
       if (!c) return;
@@ -998,9 +999,9 @@ function glossaryApp() {
       return frag.textContent;
     },
     onTextMouseUp(e, context) {
-      // click on an existing highlight/marker opens its note
+      // click on an existing highlight/marker edits its note in place, in the list below
       const hlEl = e.target.closest && e.target.closest('[data-hl]');
-      if (hlEl) { this.openNoteDialog(hlEl.dataset.hl); return; }
+      if (hlEl) { this.editHighlightInPlace(hlEl.dataset.hl); return; }
       this.showToolbarForSelection(e.currentTarget, context);
     },
     /* Keyboard twin of the mouseup path: rendered marks are role="button" via
@@ -1011,7 +1012,7 @@ function glossaryApp() {
       const hlEl = e.target.closest && e.target.closest('[data-hl]');
       if (!hlEl) return;
       e.preventDefault(); // also swallows the native click a real <button> would fire
-      this.openNoteDialog(hlEl.dataset.hl);
+      this.editHighlightInPlace(hlEl.dataset.hl);
     },
     /* Keyboard path to CREATE a highlight: extending a selection with
        Shift+arrows (caret browsing) surfaces the same toolbar mouseup does. */
@@ -1141,7 +1142,10 @@ function glossaryApp() {
       }
     },
 
-    /* ---------- note dialog ---------- */
+    /* ---------- note dialog (creation only) ----------
+       The popup appears only when a note is first created ("Note" on the
+       selection toolbar). Editing an existing highlight note happens in
+       place inside its list item — see the inline highlight editor below. */
     openNoteDialog(hlId) {
       const found = this.findHighlight(hlId);
       if (!found) return;
@@ -1185,9 +1189,56 @@ function glossaryApp() {
       this.persistCards();
     },
 
+    /* ---------- inline highlight editor ----------
+       EDIT on a highlight item flips that item into an editor, exactly like
+       the card-note item; only one highlight edits at a time (hlEditor.id). */
+    editHighlight(hlId) {
+      const found = this.findHighlight(hlId);
+      if (!found) return;
+      this.hlEditor = { id: hlId, note: found.h.note || '', tags: [...(found.h.tags || [])], tagInput: '' };
+      this.tagMenu.open = false;
+    },
+    cancelHlEdit() {
+      this.hlEditor = { id: null, note: '', tags: [], tagInput: '' };
+      this.tagMenu.open = false;
+    },
+    saveHlEditor() {
+      const found = this.findHighlight(this.hlEditor.id);
+      if (!found) return;
+      // commit any tag still sitting in the input
+      const pending = this.hlEditor.tagInput.trim().replace(/^#/, '');
+      if (pending && !this.hlEditor.tags.includes(pending)) this.hlEditor.tags.push(pending);
+      if (pending) this.recordTagUse(pending);
+      found.h.note = this.hlEditor.note.trim();
+      found.h.tags = [...new Set(this.hlEditor.tags)];
+      const ok = this.persistCards();
+      this.cancelHlEdit();
+      this.showToast(ok ? '✓ Note saved' : '⚠ Couldn’t save — device storage may be full');
+    },
+    /* Clicking a mark in the text (or Enter/Space on it) edits that highlight
+       in place: open its item's editor, bring it into view, focus the note. */
+    editHighlightInPlace(hlId) {
+      this.editHighlight(hlId);
+      this.$nextTick(() => {
+        const el = [...document.querySelectorAll('[data-hl-item="' + hlId + '"]')]
+          .find(x => x.getClientRects().length);
+        if (!el) return;
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const ta = el.querySelector('textarea');
+        if (ta) ta.focus({ preventScroll: true });
+      });
+    },
+
     /* ---------- tags ---------- */
+    /* One helper maps a tag-input target to its editor state: the note-creation
+       dialog ('note'), the inline highlight editor ('hl'), or the card editor. */
+    tagTarget(target) {
+      if (target === 'note') return this.noteDialog;
+      if (target === 'hl') return this.hlEditor;
+      return this.cardEditor;
+    },
     onTagKeydown(e, target) {
-      const dlg = target === 'note' ? this.noteDialog : this.cardEditor;
+      const dlg = this.tagTarget(target);
       const isCommit = e.key === ' ' || e.key === 'Enter' || e.key === ',';
       if (isCommit) {
         e.preventDefault();
@@ -1212,7 +1263,7 @@ function glossaryApp() {
        active editor. First run (nothing recorded yet) falls back to tags off
        the newest-saved cards so the menu is never pointlessly empty. */
     recentTags(target) {
-      const dlg = target === 'note' ? this.noteDialog : this.cardEditor;
+      const dlg = this.tagTarget(target);
       let pool = this.prefs.tagRecency || [];
       if (!pool.length) {
         pool = [];
@@ -1226,7 +1277,7 @@ function glossaryApp() {
       this.tagMenu = { open: true, target, id };
     },
     pickRecentTag(target, tag) {
-      const dlg = target === 'note' ? this.noteDialog : this.cardEditor;
+      const dlg = this.tagTarget(target);
       if (!dlg.tags.includes(tag)) dlg.tags.push(tag);
       this.recordTagUse(tag);
       this.tagMenu.open = false;

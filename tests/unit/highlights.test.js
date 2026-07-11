@@ -82,3 +82,67 @@ test('updateSavedCopy warns when a highlight no longer matches new text', () => 
   assert.equal(card.highlights[0].start, null, 'lost highlight is nulled, not deleted');
   assert.match(comp.toast, /no longer match/);
 });
+
+/* Inline highlight editor — EDIT flips the list item in place; the popup
+   note dialog is reserved for note-at-creation (user request 2026-07-11). */
+
+function annotatedComp() {
+  const comp = newComp();
+  comp.cards = [{
+    id: 'c1', title: 'T', extract: 'The cell is small', image: null, savedAt: 1,
+    note: '', tags: [],
+    highlights: [hl({ id: 'h1', text: 'cell', start: 4, note: 'old note', tags: ['bio'] })],
+  }];
+  return comp;
+}
+
+test('editHighlight loads the highlight note and tags into the inline editor', () => {
+  const comp = annotatedComp();
+  comp.editHighlight('h1');
+  assert.equal(comp.hlEditor.id, 'h1');
+  assert.equal(comp.hlEditor.note, 'old note');
+  assert.deepEqual(Array.from(comp.hlEditor.tags), ['bio']);
+  assert.equal(comp.hlEditor.tags === comp.cards[0].highlights[0].tags, false,
+    'editor works on a copy until save');
+});
+
+test('saveHlEditor commits the note, a pending typed tag, and resets the editor', () => {
+  const comp = annotatedComp();
+  comp.editHighlight('h1');
+  comp.hlEditor.note = '  new note  ';
+  comp.hlEditor.tagInput = '#pending';
+  comp.saveHlEditor();
+  const h = comp.cards[0].highlights[0];
+  assert.equal(h.note, 'new note', 'trimmed and saved');
+  assert.deepEqual(Array.from(h.tags).sort(), ['bio', 'pending']);
+  assert.equal(comp.prefs.tagRecency[0], 'pending', 'pending tag recorded as recently used');
+  assert.equal(comp.hlEditor.id, null, 'editor closed');
+  assert.equal(comp.toast, '✓ Note saved');
+});
+
+test('cancelHlEdit closes the editor and leaves the highlight untouched', () => {
+  const comp = annotatedComp();
+  comp.editHighlight('h1');
+  comp.hlEditor.note = 'scratch that';
+  comp.cancelHlEdit();
+  assert.equal(comp.cards[0].highlights[0].note, 'old note');
+  assert.equal(comp.hlEditor.id, null);
+});
+
+test("the 'hl' tag target commits chips into the inline editor and feeds its dropdown", () => {
+  const comp = annotatedComp();
+  comp.editHighlight('h1');
+  comp.hlEditor.tagInput = 'organelle';
+  comp.onTagKeydown({ key: 'Enter', preventDefault() {} }, 'hl');
+  assert.deepEqual(Array.from(comp.hlEditor.tags), ['bio', 'organelle']);
+  comp.prefs.tagRecency = ['bio', 'organelle', 'physics'];
+  assert.deepEqual(Array.from(comp.recentTags('hl')), ['physics'],
+    'dropdown skips tags already chips in the highlight editor');
+});
+
+test('clicking a mark edits in place: inline editor opens, no popup dialog', () => {
+  const comp = annotatedComp();
+  comp.editHighlightInPlace('h1');
+  assert.equal(comp.hlEditor.id, 'h1');
+  assert.equal(comp.noteDialog.show, false, 'the dialog stays reserved for creation');
+});
