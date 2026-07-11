@@ -58,7 +58,7 @@ test('Right/Wrong verdicts produce a pass/fail result with Restart and Revise', 
   const result = page.locator('.session-result');
   await expect(result).toBeVisible();
   await expect(result).toContainText('You got 1/2 correct, and skipped 0 cards.');
-  await expect(result).toContainText('Not passed'); // 1 correct vs 1 wrong → no majority
+  await expect(result).toContainText('Oh no, you failed'); // 1 correct vs 1 wrong → no majority
 
   await page.getByRole('button', { name: 'Revise wrong & skipped (1)' }).click();
   await expect(page.locator('.session-controls')).toContainText('1 / 1');
