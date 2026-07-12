@@ -75,12 +75,31 @@ function cacheable(res) {
   return res && (res.ok || res.type === 'opaque');
 }
 
+// how long the network gets before a cached copy wins — a flaky cellular
+// link must degrade into the cached shell, never into a hanging white page
+const NETWORK_TIMEOUT_MS = 5000;
+
+function withTimeout(promise, ms) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('sw-network-timeout')), ms);
+    promise.then(
+      (v) => { clearTimeout(t); resolve(v); },
+      (e) => { clearTimeout(t); reject(e); }
+    );
+  });
+}
+
 async function networkFirst(req) {
   const cache = await caches.open(SHELL_CACHE);
-  try {
-    const fresh = await fetch(req);
+  // the fetch keeps running even when the cached copy wins the race below,
+  // so a slow-but-alive network still refreshes the cache for next time
+  const network = fetch(req).then((fresh) => {
     if (cacheable(fresh)) cache.put(req, fresh.clone());
     return fresh;
+  });
+  network.catch(() => {}); // the cache path may abandon this promise
+  try {
+    return await withTimeout(network, NETWORK_TIMEOUT_MS);
   } catch (err) {
     const hit = await cache.match(req, { ignoreSearch: true });
     if (hit) return hit;
@@ -89,7 +108,8 @@ async function networkFirst(req) {
       const shell = await cache.match('./');
       if (shell) return shell;
     }
-    throw err;
+    // nothing cached: a slow network is still better than a dead request
+    return network;
   }
 }
 
