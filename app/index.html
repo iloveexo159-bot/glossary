@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://www.gstatic.com https://apis.google.com 'unsafe-eval'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' https://upload.wikimedia.org https://lh3.googleusercontent.com https://*.googleusercontent.com; connect-src https://en.wikipedia.org https://upload.wikimedia.org https://api.dictionaryapi.dev https://api.datamuse.com https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://firebaseinstallations.googleapis.com https://glossary-9363f.firebaseapp.com; media-src https://api.dictionaryapi.dev; frame-src https://glossary-9363f.firebaseapp.com https://accounts.google.com https://apis.google.com; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://www.gstatic.com https://apis.google.com 'unsafe-eval'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' https://upload.wikimedia.org https://lh3.googleusercontent.com https://*.googleusercontent.com; connect-src https://en.wikipedia.org https://en.wiktionary.org https://upload.wikimedia.org https://api.dictionaryapi.dev https://api.datamuse.com https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://firebaseinstallations.googleapis.com https://glossary-9363f.firebaseapp.com; media-src https://api.dictionaryapi.dev; frame-src https://glossary-9363f.firebaseapp.com https://accounts.google.com https://apis.google.com; base-uri 'none'; form-action 'none'; object-src 'none'">
 <title>Glossary</title>
 <!-- PWA (PRD §6 phase 8): manifest + icons. theme-color follows the manual
      theme toggle, so applyPrefs() rewrites it — the value here is light paper. -->
@@ -175,6 +175,15 @@
         <p><b>You're offline and this term isn't cached yet.</b></p>
         <p>Terms you've looked up before stay available offline; a brand-new term needs a connection once.</p>
         <button class="btn-outline" @click="nav('home')">Back to search</button>
+      </div>
+
+      <!-- fetchT abort (12s): distinct from error — the term may well exist,
+           the source was just slow, so the primary action is a retry -->
+      <div class="state-box" x-show="resultState==='timeout'">
+        <p><b x-text="'Looking up “' + lastQuery + '” timed out.'"></b></p>
+        <p>The connection may be slow, or the source busy. Trying again usually works.</p>
+        <button class="btn-primary" @click="lookup(lastQuery)">Try again</button>
+        <button class="btn-text" @click="nav('home')">BACK TO SEARCH</button>
       </div>
 
       <div x-show="resultState==='disambig'">

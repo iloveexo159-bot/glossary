@@ -66,6 +66,47 @@ test('buildDictionaryResult caps the synonym list at 8', () => {
   assert.equal(r.synonyms.length, 8);
 });
 
+test('fetchWiktionaryEntry normalizes the REST payload and strips definition HTML', async () => {
+  const comp = newComp();
+  comp._ctx.fetch = async () => ({ ok: true, json: async () => ({
+    en: [{
+      partOfSpeech: 'Noun', language: 'English',
+      definitions: [{ definition: 'Strong <a href="/wiki/hostility">hostility</a> &amp; resentment.' }],
+    }],
+  }) });
+  const e = await comp.fetchWiktionaryEntry('Animosity');
+  assert.equal(e.word, 'animosity'); // Wiktionary entries are lowercase
+  assert.equal(e.meanings[0].partOfSpeech, 'noun');
+  assert.equal(e.meanings[0].definitions[0].definition, 'Strong hostility & resentment.');
+  assert.equal(e.phonetic, '', 'no IPA/audio from Wiktionary — fields exist but empty');
+});
+
+test('dictLookupEntry falls back to Wiktionary when dictionaryapi stalls', async () => {
+  const comp = newComp();
+  comp._fetchTimeoutMs = 25;
+  comp._ctx.fetch = (url, opts) => {
+    if (String(url).includes('dictionaryapi')) {
+      return new Promise((resolve, reject) => {
+        opts.signal.addEventListener('abort', () => { const e = new Error('x'); e.name = 'AbortError'; reject(e); });
+      });
+    }
+    return Promise.resolve({ ok: true, json: async () => ({
+      en: [{ partOfSpeech: 'Noun', definitions: [{ definition: 'Great dishonor.' }] }],
+    }) });
+  };
+  const e = await comp.dictLookupEntry('ignominy');
+  assert.equal(e.meanings[0].definitions[0].definition, 'Great dishonor.');
+});
+
+test('a dictionaryapi 404 still consults Wiktionary (it covers more words)', async () => {
+  const comp = newComp();
+  comp._ctx.fetch = async (url) => String(url).includes('dictionaryapi')
+    ? { ok: false, status: 404, json: async () => ({ title: 'No Definitions Found' }) }
+    : { ok: true, json: async () => ({ en: [{ partOfSpeech: 'Adjective', definitions: [{ definition: 'Rare.' }] }] }) };
+  const e = await comp.dictLookupEntry('recondite');
+  assert.equal(e.meanings[0].definitions[0].definition, 'Rare.');
+});
+
 test('fetchDictionary treats a non-array (404 {title,message}) payload as no result', async () => {
   const comp = newComp();
   comp.lastQuery = 'zzzznotaword';

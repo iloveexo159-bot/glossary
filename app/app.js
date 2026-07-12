@@ -164,6 +164,7 @@ function glossaryApp() {
         if (s === 'loading') this.announceLive('Looking up…');
         else if (s === 'error') this.announceLive('No article found for "' + this.lastQuery + '".');
         else if (s === 'offline') this.announceLive("You're offline and this term isn't cached yet.");
+        else if (s === 'timeout') this.announceLive('The lookup timed out — try again.');
         else if (s === 'disambig') this.announceLive('Several articles match — pick one from the list.');
         else if (s === 'ok') { this.announceLive((this.result ? this.result.title : 'Article') + ' — article loaded.'); this.syncCardEditor(this.resultCard()); }
       });
@@ -275,14 +276,12 @@ function glossaryApp() {
       if (q.length < 3) return;
       if (wiki.some(w => w.title.toLowerCase() === q.toLowerCase())) return;
       try {
-        const res = await this.fetchT(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(q)}`);
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!Array.isArray(data) || !data.length) return;
+        const entry = await this.dictLookupEntry(q);
+        if (!entry) return;
         if (this.query.trim() !== q) return; // a newer keystroke moved on
-        if (this.suggestions.some(s => s.title.toLowerCase() === data[0].word.toLowerCase())) return;
-        const pos = data[0].meanings?.[0]?.partOfSpeech || 'definition';
-        this.suggestions = [...this.suggestions, { title: data[0].word, description: pos, source: 'dictionary' }];
+        if (this.suggestions.some(s => s.title.toLowerCase() === entry.word.toLowerCase())) return;
+        const pos = entry.meanings?.[0]?.partOfSpeech || 'definition';
+        this.suggestions = [...this.suggestions, { title: entry.word, description: pos, source: 'dictionary' }];
       } catch { /* offline or rate-limited — the dropdown simply omits the row */ }
     },
     moveSug(delta) {
@@ -383,10 +382,14 @@ function glossaryApp() {
         const keys = Object.keys(cache);
         if (keys.length > 60) delete cache[keys[0]];
         lsSet(LS.cache, cache);
-      } catch {
+      } catch (e) {
         const hit = cache[term.toLowerCase()];
         if (hit) { this.result = hit; this.resultState = 'ok'; this.pushRecent(hit.title); }
-        else this.resultState = navigator.onLine ? 'error' : 'offline';
+        else if (!navigator.onLine) this.resultState = 'offline';
+        // fetchT abort: reachable but too slow — its own state, because "no
+        // article found" would be a lie and a retry is genuinely worth offering
+        else if (e && e.name === 'AbortError') this.resultState = 'timeout';
+        else this.resultState = 'error';
       }
     },
     async fetchCandidates(term) {
@@ -404,11 +407,9 @@ function glossaryApp() {
        attach an option to a page the reader has already navigated past. */
     async probeDictionaryOption(term) {
       try {
-        const res = await this.fetchT(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(term)}`);
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!Array.isArray(data) || !data.length) return;
-        if (this.lastQuery === term && this.resultState === 'disambig') this.dictOption = data[0].word;
+        const entry = await this.dictLookupEntry(term);
+        if (!entry) return;
+        if (this.lastQuery === term && this.resultState === 'disambig') this.dictOption = entry.word;
       } catch { /* no dictionary entry offered — candidates stand on their own */ }
     },
     /* Reader chose the dictionary definition over the disambiguation candidates */
@@ -418,15 +419,56 @@ function glossaryApp() {
       this.fetchDictionary(term);
     },
     /* ---------- dictionary fallback (Wikipedia 404) ----------
-       Primary: dictionaryapi.dev (definitions, phonetic, audio) — keyless & CORS.
-       Companion: Datamuse `ml=` for synonyms, since dictionaryapi's own synonym
-       arrays come back empty for exactly the uncommon words that miss Wikipedia.
-       Both are fired in parallel; a Datamuse failure never blocks a definition. */
+       Two definition sources tried in order (dictLookupEntry), plus Datamuse
+       `ml=` for synonyms, since neither source's own synonym lists cover the
+       uncommon words that miss Wikipedia. Definitions and synonyms are fired
+       in parallel; a Datamuse failure never blocks a definition. */
+    /* 1. dictionaryapi.dev — richest result (IPA, audio) but a free community
+          proxy that stalls under load (mobile QA, 2026-07-12), so it gets a
+          short leash instead of the full lookup timeout.
+       2. Wiktionary's REST definition endpoint — same Wikimedia infra as the
+          article lookups, fast and dependable, definitions only (no audio).
+       Returns a dictionaryapi-shaped entry, or null = no such word. A miss on
+       the primary (404 / non-array payload) also falls through: Wiktionary
+       covers more words. Fallback aborts propagate so callers can tell a
+       timeout from a miss. */
+    async dictLookupEntry(term) {
+      try {
+        const res = await this.fetchT(
+          `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(term)}`,
+          {}, Math.min(4000, this._fetchTimeoutMs));
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length) return data[0];
+        }
+      } catch { /* stalled or down — the fallback takes over */ }
+      return this.fetchWiktionaryEntry(term);
+    },
+    async fetchWiktionaryEntry(term) {
+      const res = await this.fetchT(
+        `https://en.wiktionary.org/api/rest_v1/page/definition/${encodeURIComponent(term.toLowerCase())}`,
+        { headers: WIKI_HEADERS });
+      if (!res.ok) return null;
+      const data = await res.json();
+      const senses = Array.isArray(data.en) ? data.en : [];
+      // definitions arrive as HTML fragments (links, italics) — flatten to the
+      // plain text the highlight character-offsets require
+      const strip = (h) => String(h).replace(/<[^>]*>/g, '')
+        .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim();
+      const meanings = senses.map(s => ({
+        partOfSpeech: (s.partOfSpeech || '').toLowerCase(),
+        definitions: (s.definitions || []).map(d => ({ definition: strip(d.definition || '') })).filter(d => d.definition),
+        synonyms: [],
+      })).filter(m => m.definitions.length);
+      if (!meanings.length) return null;
+      return { word: term.toLowerCase(), phonetic: '', phonetics: [], meanings };
+    },
     async fetchDictionary(term) {
       const cache = lsGet(LS.cache, {});
       try {
-        const [defRes, synData] = await Promise.all([
-          this.fetchT(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(term)}`),
+        const [entry, synData] = await Promise.all([
+          this.dictLookupEntry(term),
           this.fetchT(`https://api.datamuse.com/words?ml=${encodeURIComponent(term)}&max=8`)
             .then(r => r.ok ? r.json() : []).catch(() => []),
         ]);
@@ -434,11 +476,8 @@ function glossaryApp() {
         // touching resultState — otherwise a slow/failed response for an
         // abandoned term clobbers the state of the term now on screen.
         if (this.lastQuery !== term) return;
-        // A miss returns a JSON *object* {title,message}, not an array — branch
-        // on Array.isArray rather than trusting res.ok alone.
-        const defData = defRes.ok ? await defRes.json() : null;
-        if (!Array.isArray(defData) || !defData.length) { this.resultState = 'error'; return; }
-        this.result = this.buildDictionaryResult(defData[0], synData);
+        if (!entry) { this.resultState = 'error'; return; }
+        this.result = this.buildDictionaryResult(entry, synData);
         this.resultState = 'ok';
         this.pushRecent(this.result.title);
         // no checkDrift: dictionary entries have no Wikipedia revision to track
@@ -448,11 +487,13 @@ function glossaryApp() {
         const keys = Object.keys(cache);
         if (keys.length > 60) delete cache[keys[0]];
         lsSet(LS.cache, cache);
-      } catch {
+      } catch (e) {
         if (this.lastQuery !== term) return; // abandoned lookup — leave current state alone
         const hit = cache[term.toLowerCase()];
         if (hit) { this.result = hit; this.resultState = 'ok'; this.pushRecent(hit.title); }
-        else this.resultState = navigator.onLine ? 'error' : 'offline';
+        else if (!navigator.onLine) this.resultState = 'offline';
+        else if (e && e.name === 'AbortError') this.resultState = 'timeout';
+        else this.resultState = 'error';
       }
     },
     /* Fuller definition: one line per part of speech (first sense of each),

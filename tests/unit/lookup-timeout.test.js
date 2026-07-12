@@ -1,24 +1,28 @@
 /* Lookup fetch timeout — mobile QA (2026-07-12): a stalled request left
    "Looking up…" on screen forever in the installed iOS PWA. fetchT aborts
-   after _fetchTimeoutMs so resultState always settles into ok/error/offline. */
+   after _fetchTimeoutMs so resultState always settles — into the dedicated
+   'timeout' state (with its retry action), never a lying "no article found". */
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { newComp } = require('./helpers/load-app');
 
-/* A fetch that never responds — it only rejects when fetchT aborts it. */
+/* A fetch that never responds — it only rejects (with the same AbortError
+   name a real aborted fetch carries) when fetchT aborts it. */
 function hangingFetch() {
   return (url, opts) => new Promise((resolve, reject) => {
-    if (opts && opts.signal) opts.signal.addEventListener('abort', () => reject(new Error('aborted')));
+    if (opts && opts.signal) opts.signal.addEventListener('abort', () => {
+      const e = new Error('aborted'); e.name = 'AbortError'; reject(e);
+    });
     // no signal → genuinely hangs, which would fail the test by timeout
   });
 }
 
-test('a lookup whose fetch never responds settles into the error state', async () => {
+test('a lookup whose fetch never responds settles into the timeout state', async () => {
   const comp = newComp();
   comp._fetchTimeoutMs = 25;
   comp._ctx.fetch = hangingFetch();
   await comp.lookup('animosity');
-  assert.equal(comp.resultState, 'error'); // navigator.onLine is true in the sandbox
+  assert.equal(comp.resultState, 'timeout'); // distinct from error: retry is offered
 });
 
 test('a timed-out lookup still serves the cached copy when one exists', async () => {
@@ -36,7 +40,7 @@ test('a timed-out lookup still serves the cached copy when one exists', async ()
   assert.equal(comp.result.title, 'animosity');
 });
 
-test('a hung fetch while offline reports the offline state, not a generic error', async () => {
+test('a hung fetch while offline reports the offline state, not timeout', async () => {
   const comp = newComp();
   comp._fetchTimeoutMs = 25;
   comp._ctx.navigator.onLine = false;
@@ -45,11 +49,18 @@ test('a hung fetch while offline reports the offline state, not a generic error'
   assert.equal(comp.resultState, 'offline');
 });
 
-test('the dictionary fallback path also settles when its fetches hang', async () => {
+test('a non-abort failure still lands on the plain error state', async () => {
+  const comp = newComp();
+  comp._ctx.fetch = async () => { throw new Error('connection reset'); };
+  await comp.lookup('animosity');
+  assert.equal(comp.resultState, 'error');
+});
+
+test('the dictionary path settles into timeout when BOTH sources hang', async () => {
   const comp = newComp();
   comp._fetchTimeoutMs = 25;
   comp._ctx.fetch = hangingFetch();
   comp.lastQuery = 'sesquipedalian';
   await comp.fetchDictionary('sesquipedalian');
-  assert.equal(comp.resultState, 'error');
+  assert.equal(comp.resultState, 'timeout');
 });
