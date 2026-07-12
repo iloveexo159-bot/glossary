@@ -70,9 +70,10 @@ Different reasons to open the app lead through different pages. The flow below c
 flowchart TD
     Start(["Open App"]) --> Home["Search / Home Page"]
 
-    Home -->|"Type a term"| Fetch{"Wikipedia lookup"}
-    Fetch -->|"Single match"| Results["Search Results Page"]
-    Fetch -->|"Ambiguous"| Disambig["Disambiguation list"]
+    Home -->|"Type a term"| Fetch{"Lookup (definition-first)"}
+    Fetch -->|"Word has a definition"| Results["Search Results Page"]
+    Fetch -->|"No entry → Wikipedia article"| Results
+    Fetch -->|"No entry → ambiguous"| Disambig["Disambiguation list"]
     Fetch -->|"No match / offline"| NoResult["No-result / offline state"]
     Disambig -->|"Pick candidate"| Results
     NoResult --> Home
