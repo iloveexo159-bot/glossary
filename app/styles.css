@@ -477,7 +477,13 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
 .face.back .back-body {
   flex: 1; min-height: 0; overflow: auto;
   display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
-  gap: var(--space-md); padding: var(--space-lg);
+  gap: var(--space-md);
+  /* top padding clears the corner controls — not just the star glyph but its
+     whole 44px icon-btn hit area (0.5rem offset + max(2.75rem,44px) target
+     = 52px deep; select-mode's checkbox mirrors it top-left). px floor for
+     the same reason as the touch targets: the hit area never shrinks with
+     the user's font scale, so neither may the clearance (mobile QA gap #4) */
+  padding: max(3.5rem, 56px) var(--space-lg) var(--space-lg);
 }
 
 .card-article-link {
