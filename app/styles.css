@@ -183,6 +183,13 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   border: 1px solid var(--color-border); border-radius: var(--rounded-full);
 }
 .input-search::placeholder { color: var(--color-text-muted); font-weight: 400; }
+/* iOS zooms the whole page when a focused input computes under 16px — and
+   never zooms back out on navigation. Floor every text-editable control at
+   16px on touch devices; desktop keeps the 15px UI size. max() holds the
+   floor even at the smallest --user-font-scale. */
+@media (pointer: coarse) {
+  input[type="text"], textarea, select { font-size: max(var(--type-ui-size), 16px); }
+}
 .search-wrap .icon-lead {
   position: absolute; left: 1rem; top: 50%; transform: translateY(-50%);
   width: 1.125rem; height: 1.125rem; color: var(--color-text-muted); pointer-events: none;
