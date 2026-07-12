@@ -330,6 +330,7 @@ function glossaryApp() {
       return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(t));
     },
     async lookup(term) {
+      term = term.trim();
       this.lastQuery = term;
       this.resultState = 'loading';
       this.result = null; this.candidates = []; this.expanded = false; this.dictOption = null;
