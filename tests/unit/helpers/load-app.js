@@ -40,6 +40,7 @@ function createContext() {
     console,
     setTimeout,
     clearTimeout,
+    AbortController, // fetchT's lookup-timeout path (host global, not a vm intrinsic)
     requestAnimationFrame: (fn) => setTimeout(fn, 16),
     localStorage: makeStorage(),
     navigator: { onLine: true },
@@ -56,6 +57,7 @@ function createContext() {
       getSelection: () => null,
       scrollX: 0,
       scrollY: 0,
+      scrollTo: noop,
     },
     document: {
       documentElement: { style: { setProperty: noop }, setAttribute: noop },

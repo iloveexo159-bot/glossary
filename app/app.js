@@ -100,6 +100,10 @@ function glossaryApp() {
     deleteDialog: { show: false, busy: false },
     toast: '', _toastTimer: null, _sugTimer: null, _selChangeTimer: null,
     announce: '', _announceTimer: null,
+    // lookup fetch abort window (overridable in tests). 12s is generous for a
+    // slow cellular link but guarantees resultState always settles — mobile QA
+    // found a stalled dictionaryapi.dev request left "Looking up…" forever.
+    _fetchTimeoutMs: 12000,
 
     /* ---------- init & routing ---------- */
     init() {
@@ -251,7 +255,7 @@ function glossaryApp() {
     async fetchSuggestions(q) {
       try {
         const url = `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(q)}&limit=5&namespace=0&format=json&origin=*`;
-        const res = await fetch(url);
+        const res = await this.fetchT(url);
         const data = await res.json();
         if (this.query.trim() !== q) return; // stale response
         const wiki = (data[1] || []).map((title, i) => ({ title, description: (data[2] || [])[i] || '', source: 'wikipedia' }));
@@ -268,7 +272,7 @@ function glossaryApp() {
       if (q.length < 3) return;
       if (wiki.some(w => w.title.toLowerCase() === q.toLowerCase())) return;
       try {
-        const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(q)}`);
+        const res = await this.fetchT(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(q)}`);
         if (!res.ok) return;
         const data = await res.json();
         if (!Array.isArray(data) || !data.length) return;
@@ -314,6 +318,15 @@ function glossaryApp() {
     clearRecent() { this.recent = []; lsSet(LS.recent, this.recent); },
 
     /* ---------- lookup ---------- */
+    /* fetch that cannot hang a lookup: aborts after _fetchTimeoutMs so every
+       lookup settles into ok / error / offline. Falls back to a plain fetch
+       where AbortController is missing (very old WebKit). */
+    fetchT(url, opts = {}) {
+      if (typeof AbortController !== 'function') return fetch(url, opts);
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), this._fetchTimeoutMs);
+      return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(t));
+    },
     async lookup(term) {
       this.lastQuery = term;
       this.resultState = 'loading';
@@ -321,7 +334,7 @@ function glossaryApp() {
       const cache = lsGet(LS.cache, {});
       try {
         const url = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(term.replace(/ /g, '_'))}?redirect=true`;
-        const res = await fetch(url, { headers: WIKI_HEADERS });
+        const res = await this.fetchT(url, { headers: WIKI_HEADERS });
         // Wikipedia has no article — fall through to the dictionary rather than
         // dead-ending. This is the ONLY thing that differs by source: everything
         // downstream (highlight, review, export) treats both the same.
@@ -376,7 +389,7 @@ function glossaryApp() {
     async fetchCandidates(term) {
       try {
         const url = `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(term)}&limit=8&namespace=0&format=json&origin=*`;
-        const res = await fetch(url);
+        const res = await this.fetchT(url);
         const data = await res.json();
         this.candidates = (data[1] || [])
           .filter(t => t.toLowerCase() !== term.toLowerCase())
@@ -388,7 +401,7 @@ function glossaryApp() {
        attach an option to a page the reader has already navigated past. */
     async probeDictionaryOption(term) {
       try {
-        const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(term)}`);
+        const res = await this.fetchT(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(term)}`);
         if (!res.ok) return;
         const data = await res.json();
         if (!Array.isArray(data) || !data.length) return;
@@ -410,8 +423,8 @@ function glossaryApp() {
       const cache = lsGet(LS.cache, {});
       try {
         const [defRes, synData] = await Promise.all([
-          fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(term)}`),
-          fetch(`https://api.datamuse.com/words?ml=${encodeURIComponent(term)}&max=8`)
+          this.fetchT(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(term)}`),
+          this.fetchT(`https://api.datamuse.com/words?ml=${encodeURIComponent(term)}&max=8`)
             .then(r => r.ok ? r.json() : []).catch(() => []),
         ]);
         // Staleness first: a newer lookup superseded this one, so return before
