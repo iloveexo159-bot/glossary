@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://www.gstatic.com https://apis.google.com 'unsafe-eval'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' https://upload.wikimedia.org https://lh3.googleusercontent.com https://*.googleusercontent.com; connect-src https://en.wikipedia.org https://en.wiktionary.org https://upload.wikimedia.org https://api.dictionaryapi.dev https://api.datamuse.com https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://firebaseinstallations.googleapis.com https://glossary-9363f.firebaseapp.com; media-src https://api.dictionaryapi.dev; frame-src https://glossary-9363f.firebaseapp.com https://accounts.google.com https://apis.google.com; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://www.gstatic.com https://apis.google.com 'unsafe-eval'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' https://upload.wikimedia.org https://lh3.googleusercontent.com https://*.googleusercontent.com; connect-src 'self' https://en.wikipedia.org https://en.wiktionary.org https://upload.wikimedia.org https://api.dictionaryapi.dev https://api.datamuse.com https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://firebaseinstallations.googleapis.com https://glossary-9363f.firebaseapp.com; media-src https://api.dictionaryapi.dev; frame-src https://glossary-9363f.firebaseapp.com https://accounts.google.com https://apis.google.com; base-uri 'none'; form-action 'none'; object-src 'none'">
 <title>Glossary</title>
 <!-- PWA (PRD §6 phase 8): manifest + icons. theme-color follows the manual
      theme toggle, so applyPrefs() rewrites it — the value here is light paper. -->
@@ -891,6 +891,9 @@
           <p class="muted" x-show="!installPrompt" style="font-family:var(--font-sans);font-size:var(--type-label-size);" x-text="installHint()"></p>
         </div>
       </template>
+      <!-- which deploy is this device actually running? (stale installed
+           copies were invisible until mobile QA hit one) -->
+      <p class="muted build-stamp" style="font-family:var(--font-sans);font-size:var(--type-label-size);" x-show="buildStamp()" x-text="'Build ' + buildStamp()"></p>
     </div>
   </section>
 

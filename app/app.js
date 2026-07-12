@@ -104,6 +104,9 @@ function glossaryApp() {
     // slow cellular link but guarantees resultState always settles — mobile QA
     // found a stalled dictionaryapi.dev request left "Looking up…" forever.
     _fetchTimeoutMs: 12000,
+    // self-update on resume: the server's app.js validator captured at load,
+    // and the timestamp of the last freshness probe (throttle)
+    _appTag: null, _lastFreshCheck: 0,
 
     /* ---------- init & routing ---------- */
     init() {
@@ -115,6 +118,16 @@ function glossaryApp() {
       // index.html — the CSP allows no 'unsafe-inline' scripts. Relative path
       // so the scope is right both at localhost root and the /glossary/ subpath.
       if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+      // An installed iOS app RESUMES from memory when reopened — no page load,
+      // so the network-first SW never gets a chance to fetch a new deploy and
+      // a phone can run stale code for days (mobile QA, 2026-07-12: eternal
+      // "Looking up…" from a copy that predated the lookup timeout). Baseline
+      // the server's app.js validator now; re-check whenever the app becomes
+      // visible again and reload into the fresh copy when it changed.
+      this.fetchAppTag().then((tag) => { this._appTag = tag; });
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') this.refreshIfStale();
+      });
       // Chromium fires this when the app qualifies for install; capturing it
       // powers the Settings "Install app" button. Safari never fires it — the
       // nudge below covers iOS/macOS Safari, whose 7-day storage eviction is
@@ -318,6 +331,40 @@ function glossaryApp() {
       lsSet(LS.recent, this.recent);
     },
     clearRecent() { this.recent = []; lsSet(LS.recent, this.recent); },
+
+    /* ---------- self-update on resume ---------- */
+    /* app.js's validator (ETag / Last-Modified) as the SERVER reports it right
+       now. HEAD bypasses the SW (it only intercepts GET) and `no-store` skips
+       the HTTP cache, so this really is the deployed version — null when
+       offline or when the server sends no validator (local dev). */
+    async fetchAppTag() {
+      try {
+        const res = await fetch('app.js', { method: 'HEAD', cache: 'no-store' });
+        return res.headers.get('etag') || res.headers.get('last-modified');
+      } catch { return null; }
+    },
+    async refreshIfStale() {
+      if (Date.now() - this._lastFreshCheck < 60000) return; // one probe per minute
+      this._lastFreshCheck = Date.now();
+      const tag = await this.fetchAppTag();
+      if (!tag) return; // offline (or dev server): nothing to learn
+      if (!this._appTag) { this._appTag = tag; return; } // load-time probe failed — adopt late
+      if (tag === this._appTag || !this.canReloadNow()) return;
+      location.reload(); // route() rebuilds the page from the hash
+    },
+    /* A reload is loss-free except mid-review (the session deck lives only in
+       memory), under an open dialog, or while a lookup is in flight. */
+    canReloadNow() {
+      return !(this.page === 'review' && this.session.ids.length && !this.session.done)
+        && !this.noteDialog.show && !this.exportSheet && !this.importOffer.show
+        && !this.deleteDialog.show && this.resultState !== 'loading';
+    },
+    /* Deploy time of the RUNNING copy (index.html's Last-Modified header) —
+       the Settings "Build" stamp that answers "which build is this device on?" */
+    buildStamp() {
+      const d = new Date(document.lastModified);
+      return isNaN(d) ? '' : d.toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
+    },
 
     /* ---------- lookup ---------- */
     /* fetch that cannot hang a lookup: aborts after `ms` (callers may pass a

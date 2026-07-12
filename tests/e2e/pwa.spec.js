@@ -32,6 +32,15 @@ test('manifest declares the installable basics', async ({ request }) => {
   expect(m.icons.some((i) => i.sizes === '512x512' && i.purpose === 'maskable')).toBeTruthy();
 });
 
+test('settings shows which build the device is running', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForSelector('#search-home', { state: 'visible' });
+  await page.evaluate(() => { location.hash = '#/settings'; });
+  // document.lastModified formatted as an ISO minute — the diagnostic that
+  // makes a stale installed copy visible (mobile QA found one the hard way)
+  await expect(page.locator('.build-stamp')).toHaveText(/^Build \d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC$/);
+});
+
 test('index.html wires the manifest, icons and theme-color', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('link[rel="manifest"]')).toHaveAttribute('href', 'manifest.json');

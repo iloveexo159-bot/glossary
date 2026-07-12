@@ -44,7 +44,7 @@ function createContext() {
     requestAnimationFrame: (fn) => setTimeout(fn, 16),
     localStorage: makeStorage(),
     navigator: { onLine: true },
-    location: { hash: '' },
+    location: { hash: '', reload: noop }, // reload: self-update-on-resume path
     confirm: () => true,
     fetch: async () => {
       throw new Error('fetch() called in a unit test — stub it on comp._ctx.fetch');
