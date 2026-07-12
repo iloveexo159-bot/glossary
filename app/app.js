@@ -200,6 +200,9 @@ function glossaryApp() {
       }
       this.toolbar.show = false;
       this.showDropdown = false;
+      // every page switch starts reading from the top — otherwise the next
+      // page inherits the previous one's scroll offset (mobile QA gap #3)
+      window.scrollTo(0, 0);
       // the search box reflects the *current* results context only — leaving
       // the results page empties it so old terms don't haunt other pages
       if (this.page !== 'results') { this.query = ''; this.suggestions = []; this.activeSug = -1; }
