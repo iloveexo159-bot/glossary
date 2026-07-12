@@ -56,6 +56,19 @@ test('a non-abort failure still lands on the plain error state', async () => {
   assert.equal(comp.resultState, 'error');
 });
 
+test('the dictionaryapi.dev leash is per-call: 4s, not the global window', async () => {
+  const comp = newComp();
+  // capture the abort delays fetchT arms — regression guard: fetchT once took
+  // only (url, opts) and silently IGNORED a third argument, so the "4s leash"
+  // at the dictLookupEntry call site was dead code and the flaky primary got
+  // the full 12s before Wiktionary was even consulted
+  const delays = [];
+  comp._ctx.setTimeout = (fn, ms) => { delays.push(ms); return 0; };
+  comp._ctx.fetch = async () => ({ ok: false, status: 404, json: async () => ({}) });
+  await comp.dictLookupEntry('ignominy');
+  assert.deepEqual(delays, [4000, 12000], 'primary on the short leash, Wiktionary on the full window');
+});
+
 test('the dictionary path settles into timeout when BOTH sources hang', async () => {
   const comp = newComp();
   comp._fetchTimeoutMs = 25;

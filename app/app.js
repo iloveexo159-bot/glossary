@@ -320,13 +320,14 @@ function glossaryApp() {
     clearRecent() { this.recent = []; lsSet(LS.recent, this.recent); },
 
     /* ---------- lookup ---------- */
-    /* fetch that cannot hang a lookup: aborts after _fetchTimeoutMs so every
-       lookup settles into ok / error / offline. Falls back to a plain fetch
-       where AbortController is missing (very old WebKit). */
-    fetchT(url, opts = {}) {
+    /* fetch that cannot hang a lookup: aborts after `ms` (callers may pass a
+       shorter per-call leash, e.g. dictionaryapi.dev) so every lookup settles
+       into ok / error / offline / timeout. Falls back to a plain fetch where
+       AbortController is missing (very old WebKit). */
+    fetchT(url, opts = {}, ms = this._fetchTimeoutMs) {
       if (typeof AbortController !== 'function') return fetch(url, opts);
       const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), this._fetchTimeoutMs);
+      const t = setTimeout(() => ctrl.abort(), ms);
       return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(t));
     },
     async lookup(term) {
