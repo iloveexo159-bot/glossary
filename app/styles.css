@@ -478,12 +478,13 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
   flex: 1; min-height: 0; overflow: auto;
   display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
   gap: var(--space-md);
-  /* top padding clears the corner controls — not just the star glyph but its
-     whole 44px icon-btn hit area (0.5rem offset + max(2.75rem,44px) target
-     = 52px deep; select-mode's checkbox mirrors it top-left). px floor for
-     the same reason as the touch targets: the hit area never shrinks with
-     the user's font scale, so neither may the clearance (mobile QA gap #4) */
-  padding: max(3.5rem, 56px) var(--space-lg) var(--space-lg);
+  /* top padding clears the star GLYPH (centered in its 44px hit box: 4px
+     offset + 11px centering + 22px glyph = 37px) with a whisker of air.
+     Reader preference (mobile QA round 2): text sits just under the star —
+     the first line's right end MAY enter the invisible corner tap zone,
+     accepted deliberately over the taller reserved strip. px floor because
+     the hit box never shrinks with the user's font scale. */
+  padding: max(2.5rem, 40px) var(--space-lg) var(--space-lg);
 }
 
 .card-article-link {
@@ -519,7 +520,9 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
   text-align: left;
 }
 .session-card .term-big { font-family: var(--font-serif); font-size: var(--type-title-size); line-height: var(--type-title-lh); font-weight: 700; }
-.star-btn { position: absolute; top: var(--space-sm); right: var(--space-sm); z-index: 2; font-size: 1.375rem; }
+/* hugs the corner (xs, not sm) so the answer text can start higher — the
+   glyph is centered in its 44px hit box, so every pixel of offset costs two */
+.star-btn { position: absolute; top: var(--space-xs); right: var(--space-sm); z-index: 2; font-size: 1.375rem; }
 .star-btn.starred { color: var(--color-text-primary); }
 .session-controls { display: flex; align-items: center; justify-content: center; gap: var(--space-lg); margin-top: var(--space-lg); }
 .icon-btn:disabled { opacity: 0.35; cursor: default; }

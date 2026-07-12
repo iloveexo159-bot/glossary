@@ -524,8 +524,8 @@
           <button class="icon-btn star-btn" :class="{ starred: c.starred }" @click.stop="toggleStar(c.id)"
                   :aria-pressed="!!c.starred" :aria-label="(c.starred ? 'Unstar ' : 'Star ') + c.title"
                   x-text="c.starred ? '★' : '☆'"></button>
-          <div class="flip-area" role="button" tabindex="0" @click="flipGridCard(c)"
-               @keydown.enter.prevent="flipGridCard(c)" @keydown.space.prevent="flipGridCard(c)"
+          <div class="flip-area" role="button" tabindex="0" @click="flipGridCard(c, $event)"
+               @keydown.enter.prevent="flipGridCard(c, $event)" @keydown.space.prevent="flipGridCard(c, $event)"
                :aria-label="'Flip card: ' + c.title" :aria-pressed="!!flipped[c.id]">
             <span class="face front">
               <span class="term-big" x-text="c.title"></span>

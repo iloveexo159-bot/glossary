@@ -658,11 +658,15 @@ function glossaryApp() {
         this.nav('card', c.id);
       }
     },
-    flipGridCard(c) {
+    flipGridCard(c, ev) {
       // during selection a tap picks the card instead of flipping it
       if (this.selectMode) { this.cardClick(c); return; }
       this.flipped[c.id] = !this.flipped[c.id];
       if (this.flipped[c.id]) this.markReviewed(c.id);
+      // the back face never unmounts, so a scrolled answer would otherwise
+      // reopen mid-text on the next reveal — every flip starts it at the top
+      const body = ev && ev.currentTarget && ev.currentTarget.querySelector('.back-body');
+      if (body) body.scrollTop = 0;
     },
     markReviewed(id) {
       const c = this.cards.find(x => x.id === id);
@@ -811,6 +815,10 @@ function glossaryApp() {
       if (!c) return;
       this.session.flipped = !this.session.flipped;
       if (this.session.flipped) this.markReviewed(c.id); // revealing the answer counts as a review
+      // same reset as flipGridCard: the shared back-body element keeps its
+      // scroll offset across flips AND across card advances otherwise
+      const body = document.querySelector('.session-card .back-body');
+      if (body) body.scrollTop = 0;
     },
     /* ---------- swipe navigation (session card, touch) ----------
        Tinder-style: the card follows the finger (translate + slight rotate),

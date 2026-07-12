@@ -26,8 +26,30 @@ test('the flipped card answer clears the star corner', async ({ page }) => {
   const card = page.locator('.review-card').first();
   await card.locator('.flip-area').click(); // reveal the answer face
   await expect(card).toHaveClass(/flipped/);
-  const star = await card.locator('.star-btn').boundingBox();
+  const starBtn = card.locator('.star-btn');
+  const star = await starBtn.boundingBox();
+  const glyphPx = await starBtn.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
   const text = await card.locator('.summary').boundingBox();
-  // the first answer line must start below the star's bottom edge
-  expect(text.y).toBeGreaterThanOrEqual(star.y + star.height);
+  // the text must clear the VISIBLE glyph (centered in its 44px hit box) —
+  // per reader preference the invisible tap-zone corner may overlap, so the
+  // full box is deliberately not the bar here (mobile QA round 2)
+  expect(text.y).toBeGreaterThanOrEqual(star.y + star.height / 2 + glyphPx / 2);
+});
+
+test('re-revealing a scrolled answer starts back at the top', async ({ page }) => {
+  // enough text that the back face genuinely scrolls (grid backs cap at 220 chars)
+  const LONG = 'This answer is long enough that the back face must scroll to read it all. '.repeat(4);
+  await openApp(page, { seed: [seedCard({ id: 'a', title: 'Atom', extract: LONG })] });
+  await hashTo(page, '#/cards');
+  await page.getByRole('button', { name: 'Flashcards', exact: true }).click();
+
+  const card = page.locator('.review-card').first();
+  await card.locator('.flip-area').click(); // reveal
+  const body = card.locator('.face.back .back-body');
+  await body.evaluate((el) => { el.scrollTop = 999; });
+  expect(await body.evaluate((el) => el.scrollTop)).toBeGreaterThan(0); // it really scrolled
+
+  await card.locator('.flip-area').click(); // hide the answer
+  await card.locator('.flip-area').click(); // reveal again
+  expect(await body.evaluate((el) => el.scrollTop)).toBe(0);
 });
