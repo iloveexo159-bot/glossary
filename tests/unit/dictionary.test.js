@@ -118,6 +118,32 @@ test('fetchDictionary treats a non-array (404 {title,message}) payload as no res
   assert.equal(comp.result, null);
 });
 
+test('the disambiguation banner survives an autocapitalized search (mobile QA round 3)', async () => {
+  // iOS capitalizes the typed term ("Animosity"); the dictionary APIs answer
+  // lowercase. The supersede guard used to read that case twin as "the reader
+  // moved on" and silently discarded the SUCCESSFUL response — leaving
+  // "Looking up…" on screen forever, with no history entry and no timeout.
+  const comp = newComp();
+  comp.lastQuery = 'Animosity';
+  comp.resultState = 'disambig';
+  comp._ctx.fetch = async (url) => String(url).includes('dictionaryapi')
+    ? { ok: true, json: async () => [entry({ word: 'animosity' })] }
+    : { ok: true, json: async () => [] };
+  await comp.showDictionaryFor('animosity'); // the lowercase word the banner offers
+  assert.equal(comp.resultState, 'ok');
+  assert.equal(comp.result.title, 'animosity');
+  assert.equal(comp.lastQuery, 'animosity', 'the chosen word becomes the current query');
+});
+
+test('a failing lookup with a case-twin query still reaches the error state', async () => {
+  const comp = newComp();
+  comp.lastQuery = 'Ignominy';
+  comp.resultState = 'loading';
+  comp._ctx.fetch = async () => { throw new Error('connection reset'); };
+  await comp.fetchDictionary('ignominy');
+  assert.equal(comp.resultState, 'error', 'the catch-path guard is case-insensitive too');
+});
+
 test('fetchDictionary ignores a stale response after the reader has moved on', async () => {
   const comp = newComp();
   comp.lastQuery = 'newterm';      // a newer lookup already superseded this one

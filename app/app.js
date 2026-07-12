@@ -464,8 +464,14 @@ function glossaryApp() {
     /* Reader chose the dictionary definition over the disambiguation candidates */
     showDictionaryFor(term) {
       this.dictOption = null;
+      // The chosen word IS the query now. It can differ from the typed one in
+      // case — iOS autocapitalizes ("Animosity") while the dictionary APIs
+      // answer lowercase — and fetchDictionary's supersede guard must not
+      // read that as "the reader moved on" (mobile QA round 3: the discarded
+      // response left "Looking up…" on screen forever).
+      this.lastQuery = term;
       this.resultState = 'loading';
-      this.fetchDictionary(term);
+      return this.fetchDictionary(term);
     },
     /* ---------- dictionary fallback (Wikipedia 404) ----------
        Two definition sources tried in order (dictLookupEntry), plus Datamuse
@@ -524,7 +530,9 @@ function glossaryApp() {
         // Staleness first: a newer lookup superseded this one, so return before
         // touching resultState — otherwise a slow/failed response for an
         // abandoned term clobbers the state of the term now on screen.
-        if (this.lastQuery !== term) return;
+        // Case-insensitive: "Animosity" (iOS autocapitalize) and "animosity"
+        // (what the dictionary APIs return) are the same word, not a move-on.
+        if (this.lastQuery.toLowerCase() !== term.toLowerCase()) return;
         if (!entry) { this.resultState = 'error'; return; }
         this.result = this.buildDictionaryResult(entry, synData);
         this.resultState = 'ok';
@@ -537,7 +545,8 @@ function glossaryApp() {
         if (keys.length > 60) delete cache[keys[0]];
         lsSet(LS.cache, cache);
       } catch (e) {
-        if (this.lastQuery !== term) return; // abandoned lookup — leave current state alone
+        // abandoned lookup — leave current state alone (case-insensitive, as above)
+        if (this.lastQuery.toLowerCase() !== term.toLowerCase()) return;
         const hit = cache[term.toLowerCase()];
         if (hit) { this.result = hit; this.resultState = 'ok'; this.pushRecent(hit.title); }
         else if (!navigator.onLine) this.resultState = 'offline';

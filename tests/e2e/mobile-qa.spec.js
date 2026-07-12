@@ -36,6 +36,25 @@ test('the flipped card answer clears the star corner', async ({ page }) => {
   expect(text.y).toBeGreaterThanOrEqual(star.y + star.height / 2 + glyphPx / 2);
 });
 
+test('the disambiguation dictionary banner works when the typed term is capitalized (iOS keyboard)', async ({ page }) => {
+  await openApp(page);
+  // iOS autocapitalizes ("Mercury") while the dictionary APIs answer lowercase
+  // ("mercury") — the supersede guard once discarded the successful response
+  // over that case twin, stranding the page on "Looking up…" forever.
+  await page.route(/api\.dictionaryapi\.dev/, (route) => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify([{
+      word: 'mercury', phonetic: '', phonetics: [],
+      meanings: [{ partOfSpeech: 'noun', definitions: [{ definition: 'A silvery liquid metal.' }], synonyms: [] }],
+    }]),
+  }));
+  await page.route(/api\.datamuse\.com/, (route) => route.fulfill({ contentType: 'application/json', body: '[]' }));
+
+  await hashTo(page, '#/results/Mercury'); // the capitalized term Wikipedia disambiguates
+  await page.locator('.dict-option').click(); // "See the definition of “mercury”"
+  await expect(page.locator('.extract')).toContainText('A silvery liquid metal.');
+});
+
 test('re-revealing a scrolled answer starts back at the top', async ({ page }) => {
   // enough text that the back face genuinely scrolls (grid backs cap at 220 chars)
   const LONG = 'This answer is long enough that the back face must scroll to read it all. '.repeat(4);
