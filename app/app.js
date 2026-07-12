@@ -40,7 +40,11 @@ function glossaryApp() {
     query: '', lastQuery: '',
     suggestions: [], sugLoading: false, showDropdown: false, activeSug: -1,
     recent: [],
-    result: null, resultState: 'idle', candidates: [], expanded: false,
+    // resultMode records which lookup path produced the current result —
+    // 'wiki' (Wikipedia-first, #/results/…) or 'dict' (definition-first,
+    // #/define/…). route() dedupes on it so navigating between the two routes
+    // for the same term re-runs the right lookup instead of showing stale state.
+    result: null, resultState: 'idle', resultMode: null, candidates: [], expanded: false,
     dictOption: null, // exact-word dictionary hit offered on a disambiguation page
     cards: [], mode: 'overview', cardSearch: '', filtersOpen: false,
     tagFilters: [], reviewedFilter: 'all', exportedFilter: 'all', starFilter: false,
@@ -194,8 +198,15 @@ function glossaryApp() {
       if (p === 'results' && parts[1]) {
         const term = decodeURIComponent(parts[1]);
         this.page = 'results';
-        // route() is the single lookup trigger; lastQuery dedupes repeat fires
-        if (this.lastQuery !== term) this.lookup(term);
+        // route() is the single lookup trigger; (term, mode) dedupes repeat fires
+        if (this.lastQuery !== term || this.resultMode !== 'wiki') this.lookup(term);
+      } else if (p === 'define' && parts[1]) {
+        // definition-first route (Enter on a raw term, the dropdown's Dictionary
+        // row): lead with the dictionary, falling back to Wikipedia when the word
+        // has no entry — see lookupDictFirst
+        const term = decodeURIComponent(parts[1]);
+        this.page = 'results';
+        if (this.lastQuery !== term || this.resultMode !== 'dict') this.lookupDictFirst(term);
       } else if (p === 'card' && parts[1]) {
         this.page = 'detail';
         this.detailId = parts[1];
@@ -277,24 +288,28 @@ function glossaryApp() {
         if (this.query.trim() !== q) return; // stale response
         const wiki = (data[1] || []).map((title, i) => ({ title, description: (data[2] || [])[i] || '', source: 'wikipedia' }));
         this.suggestions = wiki;
-        this.probeDictionarySuggestion(q, wiki); // async; appends a Dictionary row if warranted
+        this.probeDictionarySuggestion(q); // async; prepends a Dictionary row when the word has an entry
       } catch { this.suggestions = []; }
       finally { this.sugLoading = false; }
     },
     /* dictionaryapi.dev has no prefix search — only exact lookups — so we probe
-       the exact typed word and surface it as a tagged suggestion ONLY when
-       Wikipedia has no exact title match. That's precisely the "ignominy" case
-       where the dictionary is the thing that rescues a dead-end search. */
-    async probeDictionarySuggestion(q, wiki) {
+       the exact typed word. Whenever it's a real word we surface it as the FIRST
+       suggestion, ahead of the Wikipedia rows: looking up what a word MEANS is
+       the app's core job, so the definition leads even when Wikipedia also has
+       articles that merely contain the term ("vapid" → the adjective first, the
+       band member "Dan Vapid" below). */
+    async probeDictionarySuggestion(q) {
       if (q.length < 3) return;
-      if (wiki.some(w => w.title.toLowerCase() === q.toLowerCase())) return;
       try {
         const entry = await this.dictLookupEntry(q);
         if (!entry) return;
         if (this.query.trim() !== q) return; // a newer keystroke moved on
-        if (this.suggestions.some(s => s.title.toLowerCase() === entry.word.toLowerCase())) return;
         const pos = entry.meanings?.[0]?.partOfSpeech || 'definition';
-        this.suggestions = [...this.suggestions, { title: entry.word, description: pos, source: 'dictionary' }];
+        const row = { title: entry.word, description: pos, source: 'dictionary' };
+        // prepend; drop any prior dictionary row and any wiki row that is just the
+        // same word (avoids a duplicate x-for key and a redundant second row)
+        this.suggestions = [row, ...this.suggestions.filter(s =>
+          s.source !== 'dictionary' && s.title.toLowerCase() !== entry.word.toLowerCase())];
       } catch { /* offline or rate-limited — the dropdown simply omits the row */ }
     },
     moveSug(delta) {
@@ -303,9 +318,16 @@ function glossaryApp() {
     },
     submitFromInput() {
       if (this.activeSug >= 0 && this.suggestions[this.activeSug]) {
-        this.submitSearch(this.suggestions[this.activeSug].title);
+        // a highlighted suggestion is submitted in its own source's mode —
+        // a Wikipedia row opens the article, the Dictionary row the definition
+        const s = this.suggestions[this.activeSug];
+        if (s.source === 'dictionary') this.submitDefine(s.title);
+        else this.submitSearch(s.title);
       } else if (this.query.trim()) {
-        this.submitSearch(this.query.trim());
+        // raw Enter, no suggestion picked: definition-first. lookupDictFirst
+        // falls back to Wikipedia for anything the dictionary doesn't cover, so
+        // phrases and proper nouns still resolve.
+        this.submitDefine(this.query.trim());
       }
     },
     submitSearch(term) {
@@ -314,7 +336,21 @@ function glossaryApp() {
       const target = '#/results/' + encodeURIComponent(term);
       if (location.hash === target) {
         // same hash: no hashchange will fire — retry failed/offline lookups directly
-        if (this.lastQuery !== term || ['error', 'offline'].includes(this.resultState)) this.lookup(term);
+        if (this.lastQuery !== term || this.resultMode !== 'wiki' || ['error', 'offline'].includes(this.resultState)) this.lookup(term);
+        this.page = 'results';
+      } else {
+        location.hash = target; // route() performs the single lookup
+      }
+    },
+    /* Definition-first sibling of submitSearch — routes to #/define/<term> so the
+       choice survives a reload (route() calls lookupDictFirst). Used by Enter on
+       a raw term and by the dropdown's Dictionary row. */
+    submitDefine(term) {
+      this.showDropdown = false;
+      this.query = term;
+      const target = '#/define/' + encodeURIComponent(term);
+      if (location.hash === target) {
+        if (this.lastQuery !== term || this.resultMode !== 'dict' || ['error', 'offline'].includes(this.resultState)) this.lookupDictFirst(term);
         this.page = 'results';
       } else {
         location.hash = target; // route() performs the single lookup
@@ -380,6 +416,7 @@ function glossaryApp() {
     async lookup(term) {
       term = term.trim();
       this.lastQuery = term;
+      this.resultMode = 'wiki';
       this.resultState = 'loading';
       this.result = null; this.candidates = []; this.expanded = false; this.dictOption = null;
       const cache = lsGet(LS.cache, {});
@@ -440,6 +477,31 @@ function glossaryApp() {
         else if (e && e.name === 'AbortError') this.resultState = 'timeout';
         else this.resultState = 'error';
       }
+    },
+    /* Definition-first lookup (Enter on a raw term, the dropdown's Dictionary
+       row). Probe the dictionary for the exact word: a real word lands on its
+       definition; anything without an entry — multi-word phrases, proper nouns
+       like "Dan Vapid" — hands off to the Wikipedia-first lookup so the search
+       never dead-ends. The Wikipedia path owns timeout / offline / cache
+       handling, so a stalled dictionary defers to it too. */
+    async lookupDictFirst(term) {
+      term = term.trim();
+      this.lastQuery = term;
+      this.resultMode = 'dict';
+      this.resultState = 'loading';
+      this.result = null; this.candidates = []; this.expanded = false; this.dictOption = null;
+      let entry;
+      try {
+        entry = await this.dictLookupEntry(term);
+      } catch {
+        // dictionary source stalled/aborted — defer to the wiki path (it can
+        // still serve a cached copy or settle into timeout/offline)
+        if (this.lastQuery === term) { this.resultMode = 'wiki'; return this.lookup(term); }
+        return;
+      }
+      if (this.lastQuery !== term) return; // a newer lookup superseded this one
+      if (!entry) { this.resultMode = 'wiki'; return this.lookup(term); }
+      return this.fetchDictionary(term, entry); // reuse the resolved entry
     },
     async fetchCandidates(term) {
       try {
@@ -519,11 +581,13 @@ function glossaryApp() {
       if (!meanings.length) return null;
       return { word: term.toLowerCase(), phonetic: '', phonetics: [], meanings };
     },
-    async fetchDictionary(term) {
+    async fetchDictionary(term, prefetchedEntry) {
       const cache = lsGet(LS.cache, {});
       try {
         const [entry, synData] = await Promise.all([
-          this.dictLookupEntry(term),
+          // lookupDictFirst already resolved the entry — reuse it rather than
+          // hitting the dictionary source a second time
+          prefetchedEntry !== undefined ? prefetchedEntry : this.dictLookupEntry(term),
           this.fetchT(`https://api.datamuse.com/words?ml=${encodeURIComponent(term)}&max=8`)
             .then(r => r.ok ? r.json() : []).catch(() => []),
         ]);
