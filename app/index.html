@@ -471,6 +471,16 @@
           <button :class="{ active: starFilter }" :aria-pressed="starFilter" @click="starFilter = true">★ Starred</button>
         </div>
       </div>
+      <!-- "Notes" means written notes (card note or an annotated highlight) —
+           a bare highlight doesn't count; its mark already shows in the article. -->
+      <div class="filter-group" role="group" aria-label="Notes filter">
+        <span class="caption">Notes</span>
+        <div class="mode-toggle mode-toggle-sm">
+          <button :class="{ active: notesFilter==='all' }" :aria-pressed="notesFilter==='all'" @click="notesFilter='all'">All</button>
+          <button :class="{ active: notesFilter==='yes' }" :aria-pressed="notesFilter==='yes'" @click="notesFilter='yes'">Yes</button>
+          <button :class="{ active: notesFilter==='no' }" :aria-pressed="notesFilter==='no'" @click="notesFilter='no'">No</button>
+        </div>
+      </div>
       <div class="filter-group" x-show="allTags().length">
         <span class="caption">Tags</span>
         <div class="chip-row">
@@ -519,6 +529,14 @@
           <div class="badges" x-show="c.drifted" x-cloak><span class="badge-drift">Updated on Wikipedia</span></div>
           <div class="date caption" x-text="cardMeta(c)"></div>
           <div class="summary" x-text="c.extract"></div>
+          <!-- The reader's own words, distinct from the extract above: italic
+               serif behind a thin rule (no yellow — the accent stays reserved
+               for highlighted source text). Clamped like the summary. -->
+          <div class="note-inline" x-show="hasNotes(c)" x-cloak>
+            <p class="note-inline-text" x-show="(c.note || '').trim()" x-text="c.note"></p>
+            <span class="caption" x-show="hlNoteCount(c)"
+                  x-text="'✎ ' + ((c.note || '').trim() ? '+' : '') + hlNoteCount(c) + ' highlight note' + (hlNoteCount(c) === 1 ? '' : 's')"></span>
+          </div>
           <div class="chip-row">
             <template x-for="t in cardTags(c)" :key="t"><span class="chip-tag" x-text="'#' + t"></span></template>
           </div>
@@ -542,6 +560,7 @@
                @keydown.enter.prevent="flipGridCard(c, $event)" @keydown.space.prevent="flipGridCard(c, $event)"
                :aria-label="'Flip card: ' + c.title" :aria-pressed="!!flipped[c.id]">
             <span class="face front">
+              <span class="note-ind" x-show="hasNotes(c)" x-cloak aria-hidden="true">✎</span>
               <span class="term-big" x-text="c.title"></span>
               <span class="caption">Tap to flip</span>
             </span>
@@ -550,8 +569,43 @@
                 <span class="summary" x-text="c.extract.slice(0, 220) + (c.extract.length > 220 ? '…' : '')"></span>
                 <span class="caption">Tap to flip back</span>
               </span>
-              <button class="card-article-link" :tabindex="flipped[c.id] ? 0 : -1"
-                      @click.stop="nav('card', c.id)">View full article</button>
+              <!-- footer splits when the card has written notes; otherwise the
+                   article link spans full width exactly as before -->
+              <span class="card-foot">
+                <button class="card-article-link" :tabindex="flipped[c.id] ? 0 : -1"
+                        @click.stop="nav('card', c.id)">View full article</button>
+                <button class="card-article-link" x-show="hasNotes(c)" x-cloak
+                        :tabindex="flipped[c.id] ? 0 : -1"
+                        :aria-expanded="!!notesFace[c.id]"
+                        @click.stop="toggleGridNotes(c, $event)"
+                        @keydown.enter.stop @keydown.space.stop
+                        x-text="'✎ Notes (' + noteCount(c) + ')'"></button>
+              </span>
+              <!-- Notes face: an overlay "third face" on the back. It swallows
+                   taps so the drill tap-to-flip never fires under it — the only
+                   exit is the labeled footer button. -->
+              <span class="notes-face" x-show="notesFace[c.id]" x-cloak @click.stop
+                    role="group" :aria-label="'Your notes for ' + c.title">
+                <span class="notes-body">
+                  <span class="caption notes-head" x-text="'Your notes · ' + c.title"></span>
+                  <span class="notes-sec" x-show="(c.note || '').trim()">
+                    <span class="caption">Card note</span>
+                    <span class="card-note-text" x-text="c.note"></span>
+                  </span>
+                  <span class="notes-sec" x-show="(c.highlights || []).length">
+                    <span class="caption" x-text="'Highlights (' + c.highlights.length + ')'"></span>
+                    <template x-for="h in c.highlights" :key="h.id">
+                      <span class="notes-hl">
+                        <span class="notes-quote"><mark x-text="'“' + h.text + '”'"></mark></span>
+                        <span class="notes-hl-note" x-show="(h.note || '').trim()" x-text="'↳ ' + h.note"></span>
+                      </span>
+                    </template>
+                  </span>
+                </span>
+                <button class="card-article-link" :tabindex="notesFace[c.id] ? 0 : -1"
+                        @click.stop="toggleGridNotes(c, $event)"
+                        @keydown.enter.stop @keydown.space.stop>← Back to definition</button>
+              </span>
             </span>
           </div>
         </div>
@@ -599,6 +653,7 @@
                @keydown.enter.prevent="sessionFlip()"
                :aria-label="'Flip card: ' + sessionCard().title" :aria-pressed="session.flipped">
             <span class="face front">
+              <span class="note-ind" x-show="hasNotes(sessionCard())" x-cloak aria-hidden="true">✎</span>
               <span class="term-big" x-text="sessionCard().title"></span>
               <span class="caption">Tap to reveal</span>
             </span>
@@ -607,8 +662,43 @@
                 <span class="summary" x-text="sessionCard().extract"></span>
                 <span class="caption">Tap to flip back</span>
               </span>
-              <button class="card-article-link" :tabindex="session.flipped ? 0 : -1"
-                      @click.stop="nav('card', sessionCard().id)">View full article</button>
+              <!-- footer splits when the card has written notes; otherwise the
+                   article link spans full width exactly as before -->
+              <span class="card-foot">
+                <button class="card-article-link" :tabindex="session.flipped ? 0 : -1"
+                        @click.stop="nav('card', sessionCard().id)">View full article</button>
+                <button class="card-article-link" x-show="hasNotes(sessionCard())" x-cloak
+                        :tabindex="session.flipped ? 0 : -1"
+                        :aria-expanded="session.notesFace"
+                        @click.stop="toggleSessionNotes()"
+                        @keydown.enter.stop
+                        x-text="'✎ Notes (' + noteCount(sessionCard()) + ')'"></button>
+              </span>
+              <!-- Notes face: overlay "third face" on the back — see the grid
+                   card. A card sitting on its notes face is still flipped, so
+                   the verdict buttons stay enabled. -->
+              <span class="notes-face" x-show="session.notesFace" x-cloak @click.stop
+                    role="group" :aria-label="'Your notes for ' + sessionCard().title">
+                <span class="notes-body">
+                  <span class="caption notes-head" x-text="'Your notes · ' + sessionCard().title"></span>
+                  <span class="notes-sec" x-show="(sessionCard().note || '').trim()">
+                    <span class="caption">Card note</span>
+                    <span class="card-note-text" x-text="sessionCard().note"></span>
+                  </span>
+                  <span class="notes-sec" x-show="(sessionCard().highlights || []).length">
+                    <span class="caption" x-text="'Highlights (' + sessionCard().highlights.length + ')'"></span>
+                    <template x-for="h in sessionCard().highlights" :key="h.id">
+                      <span class="notes-hl">
+                        <span class="notes-quote"><mark x-text="'“' + h.text + '”'"></mark></span>
+                        <span class="notes-hl-note" x-show="(h.note || '').trim()" x-text="'↳ ' + h.note"></span>
+                      </span>
+                    </template>
+                  </span>
+                </span>
+                <button class="card-article-link" :tabindex="session.notesFace ? 0 : -1"
+                        @click.stop="toggleSessionNotes()"
+                        @keydown.enter.stop>← Back to definition</button>
+              </span>
             </span>
           </div>
         </div>

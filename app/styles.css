@@ -450,6 +450,20 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
   margin-bottom: var(--space-md);
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
 }
+/* Inline note: the reader's own words below the extract — italic serif behind
+   a thin rule separates their voice from Wikipedia's without touching the
+   highlight yellow (reserved for marked source text). Clamped tighter than
+   the summary; the full text lives on the card's notes face and Detail. */
+.flashcard .note-inline {
+  border-left: 2px solid var(--color-border-strong); padding-left: var(--space-md);
+  margin-bottom: var(--space-md);
+}
+.flashcard .note-inline-text {
+  font-family: var(--font-serif); font-style: italic;
+  font-size: var(--type-body-size); line-height: var(--type-body-lh); margin: 0;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.flashcard .note-inline .caption { display: block; margin-top: var(--space-xs); }
 /* title + star share one centered row; the title flexes and wraps so it never
    runs under the star, and align-items:center keeps the star middle-aligned
    with the title (single- or multi-line) */
@@ -518,6 +532,49 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
   text-transform: uppercase; color: var(--color-text-muted);
 }
 .card-article-link:hover { background: var(--color-background); color: var(--color-text-primary); }
+/* Footer strip splits into FULL ARTICLE | ✎ NOTES when a card has written
+   notes; the wrapper owns the top rule so the buttons don't double it. */
+.card-foot { display: flex; flex-shrink: 0; border-top: 1px solid var(--color-border); }
+.card-foot .card-article-link { border-top: 0; flex: 1 1 0; min-width: 0; }
+.card-foot .card-article-link + .card-article-link { border-left: 1px solid var(--color-border); }
+/* front-face cue that this card carries the reader's own notes (mirrors the
+   star's corner position on the opposite side; decorative, aria-hidden) */
+.note-ind { position: absolute; top: var(--space-sm); left: var(--space-md); font-size: var(--type-ui-size); color: var(--color-text-muted); }
+
+/* ---------- Notes face (flashcards mode + review session) ----------
+   An overlay panel on the back face — reads as a third card face without
+   touching the two-face 3D flip machinery. Left-aligned reading layout
+   inside the otherwise centered card; the top padding clears the star,
+   same reasoning as .back-body above. */
+.notes-face {
+  position: absolute; inset: 0; z-index: 2;
+  display: flex; flex-direction: column;
+  background: var(--color-surface); border-radius: var(--rounded-md);
+  text-align: left; cursor: default;
+}
+.notes-face .notes-body {
+  flex: 1; min-height: 0; overflow: auto;
+  display: flex; flex-direction: column; gap: var(--space-sm);
+  padding: max(2.5rem, 40px) var(--space-lg) var(--space-base);
+}
+.notes-face .caption { display: block; }
+.notes-face .notes-sec { display: flex; flex-direction: column; gap: var(--space-xs); }
+/* card note: same voice treatment as .note-inline on the overview card */
+.notes-face .card-note-text {
+  font-family: var(--font-serif); font-style: italic;
+  font-size: var(--type-body-size); line-height: var(--type-body-lh);
+  border-left: 2px solid var(--color-border-strong); padding-left: var(--space-md);
+}
+/* highlight pair: the quote wears its article yellow (non-interactive here,
+   unlike mark.hl); the reader's reaction sits indented and italic below it */
+.notes-hl { display: block; }
+.notes-quote { font-family: var(--font-serif); font-size: var(--type-body-size); line-height: var(--type-body-lh); }
+.notes-quote mark { background: var(--color-highlight); color: var(--color-text-primary); padding: 1px 0; }
+.notes-hl-note {
+  display: block; font-family: var(--font-serif); font-style: italic;
+  font-size: var(--type-body-size); line-height: var(--type-body-lh);
+  color: var(--color-text-secondary); padding-left: var(--space-base);
+}
 
 /* ---------- Review session (focused mode) ---------- */
 .session-wrap { max-width: 720px; margin: 0 auto; }

@@ -51,12 +51,12 @@ function glossaryApp() {
     result: null, resultState: 'idle', resultMode: null, candidates: [], expanded: false,
     dictOption: null, // exact-word dictionary hit offered on a disambiguation page
     cards: [], mode: 'overview', cardSearch: '', filtersOpen: false,
-    tagFilters: [], reviewedFilter: 'all', exportedFilter: 'all', starFilter: false,
+    tagFilters: [], reviewedFilter: 'all', exportedFilter: 'all', starFilter: false, notesFilter: 'all',
     cardPage: 1, cardPageSize: 12,
-    selectMode: false, selected: [], flipped: {},
+    selectMode: false, selected: [], flipped: {}, notesFace: {},
     // focused review session (#/review) — survives detours to a card's detail page.
     // verdicts maps cardId → 'correct'|'wrong'; a card with no entry was skipped.
-    session: { ids: [], idx: 0, flipped: false, done: false, verdicts: {} },
+    session: { ids: [], idx: 0, flipped: false, notesFace: false, done: false, verdicts: {} },
     // tinder-style swipe on the session card: dx tracks the live touch drag,
     // anim drives the fling-out / rise-in CSS classes between cards. The same
     // fling also serves the arrow buttons, keyboard arrows, and verdicts.
@@ -173,6 +173,7 @@ function glossaryApp() {
       this.$watch('reviewedFilter', onFilterChange);
       this.$watch('exportedFilter', onFilterChange);
       this.$watch('starFilter', onFilterChange);
+      this.$watch('notesFilter', onFilterChange);
       this.$watch('mode', () => { this.cardPage = 1; });
       // modal focus management: one watcher set covers every open/close path,
       // including the inline `exportSheet = false` handlers in the HTML
@@ -790,10 +791,25 @@ function glossaryApp() {
       // during selection a tap picks the card instead of flipping it
       if (this.selectMode) { this.cardClick(c); return; }
       this.flipped[c.id] = !this.flipped[c.id];
+      this.notesFace[c.id] = false; // a flip always lands on term/definition, never notes
       if (this.flipped[c.id]) this.markReviewed(c.id);
       // the back face never unmounts, so a scrolled answer would otherwise
       // reopen mid-text on the next reveal — every flip starts it at the top
       const body = ev && ev.currentTarget && ev.currentTarget.querySelector('.back-body');
+      if (body) body.scrollTop = 0;
+    },
+    /* Notes face: an overlay panel on the back face, reached only through its
+       labeled button — tap-anywhere still just flips term/definition. Like
+       every back-body reveal, the panel opens scrolled to the top. */
+    toggleGridNotes(c, ev) {
+      this.notesFace[c.id] = !this.notesFace[c.id];
+      const card = ev && ev.currentTarget.closest('.review-card');
+      const body = card && card.querySelector('.notes-body');
+      if (body) body.scrollTop = 0;
+    },
+    toggleSessionNotes() {
+      this.session.notesFace = !this.session.notesFace;
+      const body = document.querySelector('.session-card .notes-body');
       if (body) body.scrollTop = 0;
     },
     markReviewed(id) {
@@ -860,7 +876,7 @@ function glossaryApp() {
       // in-progress selection carries across the toggle — a card picked in
       // Overview stays picked in Flashcards and vice versa, now that the
       // flashcard checkbox is itself clickable.
-      this.mode = m; this.flipped = {};
+      this.mode = m; this.flipped = {}; this.notesFace = {};
     },
     /* One "Select" entry into a neutral selection mode; the selection bar
        offers every verb (Review / Export / Delete) at once, with a visual
@@ -911,13 +927,14 @@ function glossaryApp() {
        narrowing control at once so the full collection reappears. */
     clearCardFilters() {
       this.cardSearch = ''; this.tagFilters = [];
-      this.reviewedFilter = 'all'; this.exportedFilter = 'all'; this.starFilter = false;
+      this.reviewedFilter = 'all'; this.exportedFilter = 'all'; this.starFilter = false; this.notesFilter = 'all';
     },
     /* How many filters are narrowing the collection — shown on the collapsed
        mobile Filters chip so an active filter is never invisible. */
     activeFilterCount() {
       return (this.reviewedFilter !== 'all' ? 1 : 0)
         + (this.exportedFilter !== 'all' ? 1 : 0)
+        + (this.notesFilter !== 'all' ? 1 : 0)
         + (this.starFilter ? 1 : 0)
         + this.tagFilters.length;
     },
@@ -931,7 +948,7 @@ function glossaryApp() {
       const want = new Set(ids);
       const valid = this.computeReviewOrder().filter(id => want.has(id));
       if (!valid.length) return;
-      this.session = { ids: valid, idx: 0, flipped: false, done: false, verdicts: {} };
+      this.session = { ids: valid, idx: 0, flipped: false, notesFace: false, done: false, verdicts: {} };
       this.selectMode = false; this.selected = [];
       this.nav('review');
     },
@@ -942,6 +959,7 @@ function glossaryApp() {
       const c = this.sessionCard();
       if (!c) return;
       this.session.flipped = !this.session.flipped;
+      this.session.notesFace = false; // a flip always lands on term/definition, never notes
       if (this.session.flipped) this.markReviewed(c.id); // revealing the answer counts as a review
       // same reset as flipGridCard: the shared back-body element keeps its
       // scroll offset across flips AND across card advances otherwise
@@ -1014,13 +1032,13 @@ function glossaryApp() {
     },
     sessionNext() {
       if (this.session.idx < this.session.ids.length - 1) {
-        this.session.idx++; this.session.flipped = false;
+        this.session.idx++; this.session.flipped = false; this.session.notesFace = false;
       } else {
         this.finishSession();
       }
     },
     sessionPrev() {
-      if (this.session.idx > 0) { this.session.idx--; this.session.flipped = false; }
+      if (this.session.idx > 0) { this.session.idx--; this.session.flipped = false; this.session.notesFace = false; }
     },
     shuffleSession() {
       const a = [...this.session.ids];
@@ -1028,7 +1046,7 @@ function glossaryApp() {
         const j = Math.floor(Math.random() * (i + 1));
         [a[i], a[j]] = [a[j], a[i]];
       }
-      this.session.ids = a; this.session.idx = 0; this.session.flipped = false;
+      this.session.ids = a; this.session.idx = 0; this.session.flipped = false; this.session.notesFace = false;
       this.showToast('Shuffled');
     },
     toggleStar(id) {
@@ -1072,7 +1090,7 @@ function glossaryApp() {
       if (missed.length) this.startSession(missed);
     },
     exitSession() {
-      this.session = { ids: [], idx: 0, flipped: false, done: false, verdicts: {} };
+      this.session = { ids: [], idx: 0, flipped: false, notesFace: false, done: false, verdicts: {} };
       this.nav('cards');
     },
 
@@ -1090,6 +1108,9 @@ function glossaryApp() {
       if (this.exportedFilter !== 'all') {
         list = list.filter(c => this.exportedFilter === 'yes' ? !!c.lastExportedAt : !c.lastExportedAt);
       }
+      if (this.notesFilter !== 'all') {
+        list = list.filter(c => this.notesFilter === 'yes' ? this.hasNotes(c) : !this.hasNotes(c));
+      }
       if (this.starFilter) list = list.filter(c => !!c.starred);
       const q = this.cardSearch.trim().toLowerCase();
       if (q) list = list.filter(c => (c.title || '').toLowerCase().includes(q) || (c.extract || '').toLowerCase().includes(q));
@@ -1105,6 +1126,14 @@ function glossaryApp() {
       (c.highlights || []).forEach(h => (h.tags || []).forEach(t => set.add(t)));
       return [...set];
     },
+    /* ---------- notes surfacing (overview block, notes face, filter) ----------
+       "Has notes" means WRITTEN notes: a card-level note, or a highlight whose
+       note is non-empty. A bare highlight counts toward neither the filter nor
+       the ✎ counts (its yellow mark is already visible in the article itself),
+       but it still renders as a quote-only line on the notes face. */
+    hlNoteCount(c) { return (c.highlights || []).filter(h => (h.note || '').trim()).length; },
+    noteCount(c) { return ((c.note || '').trim() ? 1 : 0) + this.hlNoteCount(c); },
+    hasNotes(c) { return this.noteCount(c) > 0; },
     allTags() {
       const set = new Set();
       this.cards.forEach(c => this.cardTags(c).forEach(t => set.add(t)));
