@@ -213,6 +213,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 
 .dropdown {
   position: absolute; left: 0; right: 0; top: calc(100% + 0.5rem); z-index: 30;
+  /* the anchor input can shrink to a sliver (mobile top bar with the icon
+     cluster expanded) — suggestions stay readable at a floor width, capped
+     so the box never runs past the viewport (left:0 wins the constraint,
+     so extra width grows rightward) */
+  min-width: min(17.5rem, calc(100vw - 6rem));
   background: var(--color-surface); border: 1px solid var(--color-border);
   border-radius: var(--rounded-md); box-shadow: var(--shadow-sm); padding: var(--space-sm);
 }
@@ -698,9 +703,12 @@ input[type="range"] { accent-color: var(--color-text-primary); width: min(240px,
   letter-spacing: var(--type-caption-ls); text-transform: uppercase;
   color: var(--color-text-muted); border: 1px solid var(--color-border); border-radius: var(--rounded-full);
 }
-/* Compact source tag inside the suggestions dropdown row */
-.dropdown .row .row-title { display: flex; align-items: center; gap: 0.5rem; }
+/* Compact source tag inside the suggestions dropdown row — wrap so the tag
+   drops to its own line on a narrow dropdown instead of spilling past its edge */
+.dropdown .row .row-title { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; min-width: 0; }
+.dropdown .row .row-title > span:first-child { overflow-wrap: anywhere; }
 .src-tag {
+  flex-shrink: 0; white-space: nowrap;
   font-family: var(--font-sans); font-size: var(--type-caption-size); font-weight: 700;
   letter-spacing: var(--type-caption-ls); text-transform: uppercase;
   color: var(--color-text-muted); border: 1px solid var(--color-border); border-radius: var(--rounded-full);
