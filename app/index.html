@@ -377,6 +377,10 @@
 
   <!-- ============ FLASHCARDS ============ -->
   <section x-show="page==='cards'" x-cloak>
+    <!-- .cards-head: on narrow screens this whole block (title, card search,
+         toolbar, selection bar, filters panel) sticks below the top bar while
+         the grid scrolls (see CSS). Desktop: an inert wrapper. -->
+    <div class="cards-head">
     <h1 class="page-title">My Collection</h1>
 
     <!-- Flashcards search lives with the content it filters, not in the top bar —
@@ -481,6 +485,7 @@
         <button class="btn-text strong" @click="filtersOpen = false">Done</button>
       </div>
     </div>
+    </div><!-- /.cards-head -->
 
     <div class="state-box" x-show="cards.length === 0">
       <p><b>No flashcards yet.</b></p>

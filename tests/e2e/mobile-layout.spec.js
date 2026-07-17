@@ -101,8 +101,8 @@ test('entering Select mode folds the filter panel away (one surface at a time)',
   await expect(page.locator('.select-bar')).toBeVisible();
 });
 
-test('narrow viewports: selection bar sticks below the top bar during scroll', async ({ page }) => {
-  test.skip(!isNarrow(page), 'the selection bar is sticky only on narrow viewports');
+test('narrow viewports: the collection head (and its selection bar) sticks below the top bar during scroll', async ({ page }) => {
+  test.skip(!isNarrow(page), 'the collection head is sticky only on narrow viewports');
   await openApp(page, { seed: longSeed() });
   await hashTo(page, '#/cards');
   await page.getByRole('button', { name: 'Select', exact: true }).click();
@@ -110,10 +110,14 @@ test('narrow viewports: selection bar sticks below the top bar during scroll', a
   await expect(bar).toBeVisible();
 
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight / 2));
+  // 3.5rem top bar = 56px at default font size; the sticky head sits right below
+  const head = await page.locator('.cards-head').boundingBox();
+  expect(head.y).toBeGreaterThanOrEqual(50);
+  expect(head.y).toBeLessThanOrEqual(70);
+  // the selection verbs ride inside the head — still fully on screen mid-scroll
   const box = await bar.boundingBox();
-  // 3.5rem top bar = 56px at default font size; sticky bar should sit right below
-  expect(box.y).toBeGreaterThanOrEqual(50);
-  expect(box.y).toBeLessThanOrEqual(70);
+  expect(box.y).toBeGreaterThanOrEqual(head.y);
+  expect(box.y + box.height).toBeLessThanOrEqual(page.viewportSize().height);
 });
 
 test('narrow viewports: settings/account collapse behind the chrome toggle on search pages', async ({ page }) => {
