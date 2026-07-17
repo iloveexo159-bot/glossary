@@ -115,3 +115,26 @@ test('narrow viewports: selection bar sticks below the top bar during scroll', a
   expect(box.y).toBeGreaterThanOrEqual(50);
   expect(box.y).toBeLessThanOrEqual(70);
 });
+
+test('narrow viewports: settings/account collapse behind the chrome toggle on search pages', async ({ page }) => {
+  test.skip(!isNarrow(page), 'the chrome toggle renders only on narrow viewports');
+  await openApp(page, { seed: [seedCard()] });
+  await hashTo(page, '#/cards');
+
+  const settings = page.locator('button[aria-label="Settings"]');
+  const toggle = page.locator('.chrome-toggle');
+  // collapsed by default: the search bar gets the width, the icons hide
+  await expect(toggle).toBeVisible();
+  await expect(settings).toBeHidden();
+  const collapsedWidth = (await page.locator('.top-bar .search-wrap').boundingBox()).width;
+
+  await toggle.click(); // « expands the icons back
+  await expect(settings).toBeVisible();
+  const expandedWidth = (await page.locator('.top-bar .search-wrap').boundingBox()).width;
+  expect(collapsedWidth).toBeGreaterThan(expandedWidth);
+
+  // searchless pages keep their icons — the toggle only exists beside a search bar
+  await hashTo(page, '#/home');
+  await expect(toggle).toBeHidden();
+  await expect(settings).toBeVisible();
+});

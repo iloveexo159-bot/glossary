@@ -123,6 +123,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 }
 .top-links a.active { color: var(--color-text-primary); font-weight: 700; text-decoration: underline; text-underline-offset: 5px; }
 .top-links a:hover { color: var(--color-text-primary); }
+/* the chrome toggle exists only where the icons compete with the search bar.
+   Two-class selectors on purpose: .icon-btn's display:inline-flex sits later
+   in the file, so a bare .chrome-toggle would lose the cascade to it */
+.top-bar .chrome-toggle { display: none; }
 @media (max-width: 640px) {
   .top-links { display: none; }
   /* narrow screens: bottom nav already links Home — drop the wordmark so the
@@ -132,6 +136,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
      with it hidden, Settings takes over so Settings + Account stay pinned
      to the right edge on searchless pages (home, settings, account) */
   .settings-btn { margin-left: auto; }
+  /* On search pages, settings + account collapse behind the «/» toggle
+     (collapsed by default) so the search bar gets their width */
+  .top-bar .chrome-toggle { display: inline-flex; }
+  .top-bar.chrome-collapsed .settings-btn,
+  .top-bar.chrome-collapsed .account-btn { display: none; }
 }
 
 .icon-btn {

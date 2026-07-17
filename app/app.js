@@ -37,6 +37,10 @@ function glossaryApp() {
   return {
     /* ---------- state ---------- */
     page: 'home',
+    // narrow screens: settings + account tuck behind a «/» toggle so the
+    // top-bar search gets their width — collapsed (false) by default; the
+    // class this drives only applies ≤640px, so desktop never changes
+    topChromeOpen: false,
     query: '', lastQuery: '',
     suggestions: [], sugLoading: false, showDropdown: false, activeSug: -1,
     recent: [],
@@ -268,6 +272,8 @@ function glossaryApp() {
       const el = document.getElementById(this.page === 'home' ? 'search-home' : 'search-top');
       if (el && (this.page === 'home' || this.page === 'results')) el.focus();
     },
+    // which pages carry the top-bar search (home uses the centered hero search)
+    topSearchVisible() { return this.page === 'results' || this.page === 'cards' || this.page === 'detail'; },
 
     /* ---------- search & suggestions ---------- */
     onSearchFocus() { this.showDropdown = true; },

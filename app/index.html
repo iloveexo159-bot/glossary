@@ -32,7 +32,7 @@
 <!-- Bar spans the screen; its contents share the same centered column as <main>
      so nothing hugs the edge of a wide monitor. Nav + settings are pinned to the
      column's right edge on every page (margin-left:auto — no conditional spacer). -->
-<header class="top-bar">
+<header class="top-bar" :class="{ 'chrome-collapsed': !topChromeOpen && topSearchVisible() }">
 <div class="top-bar-inner">
   <button class="icon-btn" x-show="page!=='home'"
           @click="goBack()" aria-label="Back" x-cloak>←</button>
@@ -40,7 +40,7 @@
   <button class="brand" x-show="page!=='home'" @click="nav('home')" x-cloak>Glossary</button>
 
   <!-- Wikipedia search (content pages — home uses the centered hero search) -->
-  <div class="search-wrap" x-show="page==='results' || page==='cards' || page==='detail'" x-cloak @click.stop>
+  <div class="search-wrap" x-show="topSearchVisible()" x-cloak @click.stop>
     <svg class="icon-lead" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
     <input id="search-top" class="input-search" type="text" autocomplete="off"
            placeholder="Search Wikipedia" aria-label="Search Wikipedia"
@@ -78,6 +78,15 @@
       </template>
     </div>
   </div>
+
+  <!-- Narrow screens only (CSS hides it above 640px): settings + account
+       collapse behind this toggle so the search bar gets their width.
+       « reveals them, » tucks them away; collapsed is the default. -->
+  <button class="icon-btn chrome-toggle" x-show="topSearchVisible()" x-cloak
+          @click="topChromeOpen = !topChromeOpen"
+          :aria-expanded="topChromeOpen"
+          :aria-label="topChromeOpen ? 'Hide settings and account' : 'Show settings and account'"
+          x-text="topChromeOpen ? '»' : '«'"></button>
 
   <nav class="top-links" aria-label="Primary">
     <a href="#/home" :class="{ active: page==='home' || page==='results' }">Home</a>
