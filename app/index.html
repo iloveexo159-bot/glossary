@@ -539,8 +539,8 @@
                for highlighted source text). Clamped like the summary. -->
           <div class="note-inline" x-show="hasNotes(c)" x-cloak>
             <p class="note-inline-text" x-show="(c.note || '').trim()" x-text="c.note"></p>
-            <span class="caption" x-show="hlNoteCount(c)"
-                  x-text="'✎ ' + ((c.note || '').trim() ? '+' : '') + hlNoteCount(c) + ' highlight note' + (hlNoteCount(c) === 1 ? '' : 's')"></span>
+            <span class="caption" x-show="hlCount(c)"
+                  x-text="'✎ ' + ((c.note || '').trim() ? '+' : '') + hlCount(c) + ' highlight note' + (hlCount(c) === 1 ? '' : 's')"></span>
           </div>
           <div class="chip-row">
             <template x-for="t in cardTags(c)" :key="t"><span class="chip-tag" x-text="'#' + t"></span></template>
@@ -592,7 +592,6 @@
               <span class="notes-face" x-show="notesFace[c.id]" x-cloak @click.stop
                     role="group" :aria-label="'Your notes for ' + c.title">
                 <span class="notes-body">
-                  <span class="caption notes-head" x-text="'Your notes · ' + c.title"></span>
                   <span class="notes-sec" x-show="(c.note || '').trim()">
                     <span class="caption">Card note</span>
                     <span class="card-note-text" x-text="c.note"></span>
@@ -685,7 +684,6 @@
               <span class="notes-face" x-show="session.notesFace" x-cloak @click.stop
                     role="group" :aria-label="'Your notes for ' + sessionCard().title">
                 <span class="notes-body">
-                  <span class="caption notes-head" x-text="'Your notes · ' + sessionCard().title"></span>
                   <span class="notes-sec" x-show="(sessionCard().note || '').trim()">
                     <span class="caption">Card note</span>
                     <span class="card-note-text" x-text="sessionCard().note"></span>

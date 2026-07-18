@@ -277,7 +277,9 @@ function glossaryApp() {
     topSearchVisible() { return this.page === 'results' || this.page === 'cards' || this.page === 'detail'; },
 
     /* ---------- search & suggestions ---------- */
-    onSearchFocus() { this.showDropdown = true; },
+    // focusing the search collapses the mobile settings/account chrome, so the
+    // widened field shows what's being typed (no-op on Home, where it's hidden)
+    onSearchFocus() { this.showDropdown = true; this.topChromeOpen = false; },
     onQueryInput() {
       this.showDropdown = true;
       this.activeSug = -1;
@@ -1175,12 +1177,14 @@ function glossaryApp() {
       return [...set];
     },
     /* ---------- notes surfacing (overview block, notes face, filter) ----------
-       "Has notes" means WRITTEN notes: a card-level note, or a highlight whose
-       note is non-empty. A bare highlight counts toward neither the filter nor
-       the ✎ counts (its yellow mark is already visible in the article itself),
-       but it still renders as a quote-only line on the notes face. */
-    hlNoteCount(c) { return (c.highlights || []).filter(h => (h.note || '').trim()).length; },
-    noteCount(c) { return ((c.note || '').trim() ? 1 : 0) + this.hlNoteCount(c); },
+       A card surfaces annotations when it has a card-level note OR any
+       highlight — including a BARE highlight (highlighted text with no note),
+       so a highlight a reader made without writing anything is still reviewable
+       without opening the article. hlCount is every highlight; noteCount adds
+       the card note; hasNotes gates the ✎ indicator, the overview block, the
+       notes face, and the Notes filter alike. */
+    hlCount(c) { return (c.highlights || []).length; },
+    noteCount(c) { return ((c.note || '').trim() ? 1 : 0) + this.hlCount(c); },
     hasNotes(c) { return this.noteCount(c) > 0; },
     allTags() {
       const set = new Set();
