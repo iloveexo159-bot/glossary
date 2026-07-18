@@ -330,6 +330,10 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
 /* Rule between the card-level actions and the notes area below them */
 .section-rule { border: none; border-top: 1px solid var(--color-border); margin: var(--space-lg) 0; }
 .state-box { text-align: center; padding: var(--space-2xl) var(--space-base); color: var(--color-text-secondary); }
+/* "Did you mean" fix on the no-results screen: whole sentence is one btn-text
+   tap target (44px floor on touch); the corrected word carries the underline */
+.spell-fix { display: block; margin: 0 auto var(--space-sm); font-size: var(--type-ui-size); letter-spacing: normal; }
+.spell-fix .fix-word { text-decoration: underline; text-underline-offset: 3px; }
 .candidates .row {
   display: block; width: 100%; text-align: left; background: var(--color-surface);
   border: 1px solid var(--color-border); border-radius: var(--rounded-md); cursor: pointer;

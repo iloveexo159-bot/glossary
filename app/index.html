@@ -66,8 +66,8 @@
       <template x-if="query.trim().length > 0">
         <div>
           <template x-for="(s, i) in suggestions" :key="s.title">
-            <button class="row" :class="{ active: i === activeSug }" @click="s.source==='dictionary' ? submitDefine(s.title) : submitSearch(s.title)">
-              <span class="row-title"><span x-text="s.title"></span><span class="src-tag" x-show="s.source==='dictionary'" x-cloak>Dictionary</span></span>
+            <button class="row" :class="{ active: i === activeSug }" @click="s.source==='wikipedia' ? submitSearch(s.title) : submitDefine(s.title)">
+              <span class="row-title"><span x-text="s.title"></span><span class="src-tag" x-show="s.source==='dictionary'" x-cloak>Dictionary</span><span class="src-tag" x-show="s.source==='spell'" x-cloak>Did you mean?</span></span>
               <small x-show="s.description" x-text="s.description"></small>
             </button>
           </template>
@@ -137,8 +137,8 @@
         <button class="icon-clear" x-show="query.length > 0" @click="clearSearch()" aria-label="Clear search" x-cloak>✕</button>
         <div class="dropdown" x-show="showDropdown && query.trim().length > 0" x-cloak>
           <template x-for="(s, i) in suggestions" :key="s.title">
-            <button class="row" :class="{ active: i === activeSug }" @click="s.source==='dictionary' ? submitDefine(s.title) : submitSearch(s.title)">
-              <span class="row-title"><span x-text="s.title"></span><span class="src-tag" x-show="s.source==='dictionary'" x-cloak>Dictionary</span></span>
+            <button class="row" :class="{ active: i === activeSug }" @click="s.source==='wikipedia' ? submitSearch(s.title) : submitDefine(s.title)">
+              <span class="row-title"><span x-text="s.title"></span><span class="src-tag" x-show="s.source==='dictionary'" x-cloak>Dictionary</span><span class="src-tag" x-show="s.source==='spell'" x-cloak>Did you mean?</span></span>
               <small x-show="s.description" x-text="s.description"></small>
             </button>
           </template>
@@ -176,6 +176,11 @@
 
       <div class="state-box" x-show="resultState==='error'">
         <p><b x-text="'No article found for “' + lastQuery + '”.'"></b></p>
+        <!-- Spelling safety net (probeSpellFix): the whole line is the tap
+             target so the 44px floor holds; definition-first like raw Enter -->
+        <button class="btn-text strong spell-fix" x-show="spellFix" x-cloak @click="submitDefine(spellFix)">
+          Did you mean “<span class="fix-word" x-text="spellFix"></span>”?
+        </button>
         <p>Check the spelling, or try a broader or more formal term.</p>
         <button class="btn-outline" @click="nav('home')">Back to search</button>
       </div>

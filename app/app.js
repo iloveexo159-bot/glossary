@@ -48,7 +48,7 @@ function glossaryApp() {
     // 'wiki' (Wikipedia-first, #/results/…) or 'dict' (definition-first,
     // #/define/…). route() dedupes on it so navigating between the two routes
     // for the same term re-runs the right lookup instead of showing stale state.
-    result: null, resultState: 'idle', resultMode: null, candidates: [], expanded: false,
+    result: null, resultState: 'idle', resultMode: null, candidates: [], expanded: false, spellFix: null,
     dictOption: null, // exact-word dictionary hit offered on a disambiguation page
     cards: [], mode: 'overview', cardSearch: '', filtersOpen: false,
     tagFilters: [], reviewedFilter: 'all', exportedFilter: 'all', starFilter: false, notesFilter: 'all',
@@ -184,7 +184,7 @@ function glossaryApp() {
       // lookup lifecycle is otherwise silent to assistive tech
       this.$watch('resultState', s => {
         if (s === 'loading') this.announceLive('Looking up…');
-        else if (s === 'error') this.announceLive('No article found for "' + this.lastQuery + '".');
+        else if (s === 'error') { this.announceLive('No article found for "' + this.lastQuery + '".'); this.probeSpellFix(this.lastQuery); }
         else if (s === 'offline') this.announceLive("You're offline and this term isn't cached yet.");
         else if (s === 'timeout') this.announceLive('The lookup timed out — try again.');
         else if (s === 'disambig') this.announceLive('Several articles match — pick one from the list.');
@@ -296,6 +296,7 @@ function glossaryApp() {
         const wiki = (data[1] || []).map((title, i) => ({ title, description: (data[2] || [])[i] || '', source: 'wikipedia' }));
         this.suggestions = wiki;
         this.probeDictionarySuggestion(q); // async; prepends a Dictionary row when the word has an entry
+        this.probeSpellSuggestion(q); // async; prepends a "Did you mean" row when the typed text looks like a typo
       } catch { this.suggestions = []; }
       finally { this.sugLoading = false; }
     },
@@ -314,10 +315,56 @@ function glossaryApp() {
         const pos = entry.meanings?.[0]?.partOfSpeech || 'definition';
         const row = { title: entry.word, description: pos, source: 'dictionary' };
         // prepend; drop any prior dictionary row and any wiki row that is just the
-        // same word (avoids a duplicate x-for key and a redundant second row)
+        // same word (avoids a duplicate x-for key and a redundant second row).
+        // A spell row also goes: the typed word having an entry proves it's a
+        // real word, so a "did you mean" correction is noise.
         this.suggestions = [row, ...this.suggestions.filter(s =>
-          s.source !== 'dictionary' && s.title.toLowerCase() !== entry.word.toLowerCase())];
+          s.source !== 'dictionary' && s.source !== 'spell' && s.title.toLowerCase() !== entry.word.toLowerCase())];
       } catch { /* offline or rate-limited — the dropdown simply omits the row */ }
+    },
+    /* Datamuse /sug — the same corpus that already powers the synonyms row
+       (`ml=`) — ranks real words near the typed text, typos included. Returns
+       the top hit when it's a DIFFERENT word, else null. Wikipedia's own typo
+       machinery was probed and fails on the motivating case ("viviseting":
+       opensearch profile=fuzzy returns ViVi junk, srinfo=suggestion returns
+       nothing); Datamuse returns "vivisecting" first. */
+    async spellSuggest(q) {
+      const res = await this.fetchT(`https://api.datamuse.com/sug?s=${encodeURIComponent(q)}&max=1`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      const top = Array.isArray(data) && data[0] && data[0].word;
+      return top && top.toLowerCase() !== q.toLowerCase() ? top : null;
+    },
+    /* "Did you mean" row, first in the dropdown. Suppressed when the hit is a
+       mere prefix-completion of the typed text (opensearch already lists
+       completions — the row would duplicate them) or when the typed word has a
+       dictionary row (a real word needs no correcting). Submits like the
+       Dictionary row: definition-first, so proper-noun typos ("Einstien")
+       still land on Wikipedia via lookupDictFirst's fallback. */
+    async probeSpellSuggestion(q) {
+      if (q.length < 3) return;
+      try {
+        const word = await this.spellSuggest(q);
+        if (!word || word.toLowerCase().startsWith(q.toLowerCase())) return;
+        if (this.query.trim() !== q) return; // a newer keystroke moved on
+        if (this.suggestions.some(s => s.source === 'dictionary')) return; // typed word is real
+        const row = { title: word, description: '', source: 'spell' };
+        this.suggestions = [row, ...this.suggestions.filter(s =>
+          s.source !== 'spell' && s.title.toLowerCase() !== word.toLowerCase())];
+      } catch { /* offline or rate-limited — the dropdown simply omits the row */ }
+    },
+    /* Results-page safety net: the reader hit Enter on a typo without reading
+       the dropdown (one-handed typing). When a lookup dead-ends in 'error',
+       offer the spelling fix as a tappable line under the headline. Fired by
+       the resultState watcher so every path into 'error' is covered. */
+    async probeSpellFix(term) {
+      try {
+        const word = await this.spellSuggest(term);
+        if (!word) return;
+        if (this.lastQuery !== term || this.resultState !== 'error') return;
+        this.spellFix = word;
+        this.announceLive('Did you mean "' + word + '"?');
+      } catch { /* no correction offered — the error screen stands as-is */ }
     },
     moveSug(delta) {
       if (!this.suggestions.length) return;
@@ -326,10 +373,11 @@ function glossaryApp() {
     submitFromInput() {
       if (this.activeSug >= 0 && this.suggestions[this.activeSug]) {
         // a highlighted suggestion is submitted in its own source's mode —
-        // a Wikipedia row opens the article, the Dictionary row the definition
+        // a Wikipedia row opens the article; Dictionary and Did-you-mean rows
+        // both go definition-first
         const s = this.suggestions[this.activeSug];
-        if (s.source === 'dictionary') this.submitDefine(s.title);
-        else this.submitSearch(s.title);
+        if (s.source === 'wikipedia') this.submitSearch(s.title);
+        else this.submitDefine(s.title);
       } else if (this.query.trim()) {
         // raw Enter, no suggestion picked: definition-first. lookupDictFirst
         // falls back to Wikipedia for anything the dictionary doesn't cover, so
@@ -425,7 +473,7 @@ function glossaryApp() {
       this.lastQuery = term;
       this.resultMode = 'wiki';
       this.resultState = 'loading';
-      this.result = null; this.candidates = []; this.expanded = false; this.dictOption = null;
+      this.result = null; this.candidates = []; this.expanded = false; this.dictOption = null; this.spellFix = null;
       const cache = lsGet(LS.cache, {});
       try {
         const url = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(term.replace(/ /g, '_'))}?redirect=true`;
@@ -496,7 +544,7 @@ function glossaryApp() {
       this.lastQuery = term;
       this.resultMode = 'dict';
       this.resultState = 'loading';
-      this.result = null; this.candidates = []; this.expanded = false; this.dictOption = null;
+      this.result = null; this.candidates = []; this.expanded = false; this.dictOption = null; this.spellFix = null;
       let entry;
       try {
         entry = await this.dictLookupEntry(term);
