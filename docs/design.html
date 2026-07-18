@@ -457,6 +457,12 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
       <div class="row">Great Depression <small>Worldwide economic downturn, 1929–1939</small></div>
       <div class="row empty">No article matches "graet wall" — check the spelling or try a broader term.</div>
     </div>
+    <div class="demo-label">"Did you mean?" · when the typed text looks misspelled, a Datamuse spell-suggest row leads the dropdown (tapping runs the definition-first lookup of the correction) · suppressed for real words and prefix-completions · the no-results screen offers the same one-tap fix</div>
+    <div class="dropdown">
+      <div class="row is-active"><span class="row-title"><span>vivisecting</span><span class="src-tag">Did you mean?</span></span></div>
+      <div class="row">ViVi (single album)</div>
+      <div class="row">ViVi (singer)</div>
+    </div>
   </div>
 
   <h3>Buttons</h3>
@@ -494,6 +500,10 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
       </div>
       <div class="demo-row" style="align-items:center;margin:0;">
         <span style="font-family:var(--font-sans);font-size:var(--type-caption-size);font-weight:700;letter-spacing:var(--type-caption-ls);text-transform:uppercase;color:var(--color-text-muted);flex:0 0 4.5rem;">Exported</span>
+        <span class="chip-filter is-active">All</span><span class="chip-filter">Yes</span><span class="chip-filter">No</span>
+      </div>
+      <div class="demo-row" style="align-items:center;margin:0;">
+        <span style="font-family:var(--font-sans);font-size:var(--type-caption-size);font-weight:700;letter-spacing:var(--type-caption-ls);text-transform:uppercase;color:var(--color-text-muted);flex:0 0 4.5rem;">Notes</span>
         <span class="chip-filter is-active">All</span><span class="chip-filter">Yes</span><span class="chip-filter">No</span>
       </div>
       <div class="demo-row" style="align-items:center;margin:0;">
@@ -539,17 +549,20 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
       <span style="font-family:var(--font-sans);font-size:var(--type-caption-size);font-weight:700;letter-spacing:var(--type-caption-ls);text-transform:uppercase;color:var(--color-text-muted);">Page 1 of 2</span>
       <button class="btn-text">NEXT →</button>
     </div>
-    <div class="demo-label">card-flashcard (Overview) · star toggle top-right · card-flip (Flashcards mode): whole card rotates, article strip lives on the back face only</div>
+    <div class="demo-label">card-flashcard (Overview) · star toggle top-right · the card note renders inline beneath the summary (italic Literata + 2px left rule) with a highlight-note count · card-flip (Flashcards): whole card rotates, article strip on the back face only · a card with notes shows a ✎ on the front and splits the back foot into VIEW FULL ARTICLE + ✎ NOTES, which opens a transient notes face (card note, then highlighted quotes with ↳ notes) — ← BACK TO DEFINITION is the only way out</div>
     <div class="demo-row" style="align-items:stretch;">
       <div class="flashcard" style="position:relative;">
         <button class="icon-btn" aria-label="Star" style="position:absolute;top:0.5rem;right:0.5rem;">☆</button>
         <div class="term">Great Wall of China</div>
         <div class="date">Saved Jul 1 · Reviewed 2 days ago</div>
         <div class="summary">A series of fortifications built across the historical northern borders of ancient Chinese states…</div>
+        <div style="border-left:2px solid var(--color-border-strong);padding-left:var(--space-sm);margin-top:var(--space-sm);font-family:var(--font-serif);font-style:italic;font-size:var(--type-ui-size);color:var(--color-text-secondary);">Reminds me of the aqueduct chapter — the logistics, not the myth.</div>
+        <div style="font-family:var(--font-sans);font-size:var(--type-caption-size);font-weight:700;letter-spacing:var(--type-caption-ls);text-transform:uppercase;color:var(--color-text-muted);margin-top:0.25rem;">✎ 2 highlight notes</div>
         <div class="tags"><span class="chip-tag">#history</span><span class="chip-tag">#architecture</span></div>
       </div>
       <div class="review-card" tabindex="0" style="position:relative;">
         <button class="icon-btn" aria-label="Star" style="position:absolute;top:0.5rem;right:0.5rem;">★</button>
+        <span aria-hidden="true" style="position:absolute;top:0.5rem;left:0.75rem;color:var(--color-text-muted);">✎</span>
         <div class="term-big">Ansible</div>
         <div class="book-footer" style="padding:0;">Front · Tap to flip</div>
       </div>
@@ -558,7 +571,19 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
           <div class="summary" style="text-align:left;">A tool for automating configuration management and application deployment across many machines…</div>
           <div class="book-footer" style="padding:0;">Tap to flip back</div>
         </div>
-        <button class="btn-text" style="width:100%;border-top:1px solid var(--color-border);border-radius:0;">VIEW FULL ARTICLE</button>
+        <div style="display:flex;border-top:1px solid var(--color-border);">
+          <button class="btn-text" style="flex:1;border-radius:0;">VIEW FULL ARTICLE</button>
+          <button class="btn-text" style="flex:1;border-radius:0;border-left:1px solid var(--color-border);color:var(--color-text-primary);">✎ NOTES (2)</button>
+        </div>
+      </div>
+      <div class="review-card" tabindex="0" style="justify-content:space-between;padding:0;">
+        <div style="flex:1;display:flex;flex-direction:column;align-items:stretch;gap:var(--space-md);padding:var(--space-lg);overflow:auto;text-align:left;">
+          <div style="font-family:var(--font-sans);font-size:var(--type-caption-size);font-weight:700;letter-spacing:var(--type-caption-ls);text-transform:uppercase;color:var(--color-text-muted);">Your note</div>
+          <div style="border-left:2px solid var(--color-border-strong);padding-left:var(--space-sm);font-family:var(--font-serif);font-style:italic;color:var(--color-text-secondary);">Reminds me of the aqueduct chapter — the logistics, not the myth.</div>
+          <div style="font-family:var(--font-sans);font-size:var(--type-caption-size);font-weight:700;letter-spacing:var(--type-caption-ls);text-transform:uppercase;color:var(--color-text-muted);">Highlights</div>
+          <div style="font-family:var(--font-serif);"><mark style="background:var(--color-highlight);color:var(--color-text-primary);">built across the historical northern borders</mark><div style="font-style:italic;color:var(--color-text-secondary);padding-left:var(--space-base);margin-top:0.25rem;">↳ the logistics, not the myth</div></div>
+        </div>
+        <button class="btn-text" style="width:100%;border-top:1px solid var(--color-border);border-radius:0;">← BACK TO DEFINITION</button>
       </div>
     </div>
   </div>
@@ -724,7 +749,7 @@ mark.hl:hover, mark.hl:focus-visible { box-shadow: 0 2px 0 var(--color-text-prim
     </div>
   </div>
 
-  <p class="note" style="margin-top:var(--space-2xl);">Glossary design system · mirror of docs/design.md · derived from PRD_WikiSearch_MVP.md + raw-design-system.fig only · updated 2026-07-12</p>
+  <p class="note" style="margin-top:var(--space-2xl);">Glossary design system · mirror of docs/design.md · derived from PRD_WikiSearch_MVP.md + raw-design-system.fig only · updated 2026-07-18</p>
 </main>
 
 <script>
